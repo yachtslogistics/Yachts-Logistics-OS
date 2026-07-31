@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dashboard — Yacht Logistics OS</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>⚓</text></svg>">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<div class="app-shell">
+  <aside class="sidebar">
+    <div class="sidebar-brand">
+      <div class="mark">⚓</div>
+      <div>
+        <div class="name">Yacht Logistics</div>
+        <div class="sub">Operating System</div>
+      </div>
+    </div>
+    <ul class="nav-list">
+      <li><a href="dashboard.html" class="active">Dashboard</a></li>
+      <li><a href="prospects.html">Prospects</a></li>
+      <li><a href="pipeline.html">Pipeline</a></li>
+      <li><a href="settings.html">Settings</a></li>
+      <li><a href="activity.html">Activity Log</a></li>
+    </ul>
+    <div class="sidebar-footer">
+      <div class="user-email" data-user-email>—</div>
+      <button class="btn-signout" data-signout>Sign out</button>
+    </div>
+  </aside>
+
+  <main class="main">
+    <div class="page-header">
+      <h1>Dashboard</h1>
+      <p>Business development overview.</p>
+    </div>
+
+    <div class="stat-grid">
+      <div class="stat-card">
+        <div class="label">Total prospects</div>
+        <div class="value" id="stat-prospects">—</div>
+      </div>
+      <div class="stat-card">
+        <div class="label">Drafts awaiting approval</div>
+        <div class="value" id="stat-drafts">—</div>
+        <div class="note">No AI worker running yet — Milestone 2</div>
+      </div>
+      <div class="stat-card">
+        <div class="label">Unhandled replies</div>
+        <div class="value" id="stat-replies">—</div>
+        <div class="note">No AI worker running yet — Milestone 2</div>
+      </div>
+      <div class="stat-card">
+        <div class="label">Follow-ups due today</div>
+        <div class="value" id="stat-followups">—</div>
+        <div class="note">No AI worker running yet — Milestone 2</div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-header">
+        <h2>Recent activity</h2>
+        <a href="activity.html" class="btn btn-secondary btn-sm">View full log</a>
+      </div>
+      <div id="recent-activity">
+        <div class="log-row"><span class="log-time">—</span><span>Loading…</span></div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<script type="module">
+  import { supabase, requireAuth, wireSignOut, timeAgo } from './js/supabaseClient.js';
+
+  await requireAuth();
+  wireSignOut();
+
+  const { count: prospectCount } = await supabase
+    .from('prospects').select('*', { count: 'exact', head: true });
+  document.getElementById('stat-prospects').textContent = prospectCount ?? 0;
+
+  const { count: draftCount } = await supabase
+    .from('email_drafts').select('*', { count: 'exact', head: true })
+    .eq('status', 'draft');
+  document.getElementById('stat-drafts').textContent = draftCount ?? 0;
+
+  const { count: replyCount } = await supabase
+    .from('replies').select('*', { count: 'exact', head: true })
+    .eq('handled', false);
+  document.getElementById('stat-replies').textContent = replyCount ?? 0;
+
+  const today = new Date().toISOString().slice(0, 10);
+  const { count: followUpCount } = await supabase
+    .from('follow_ups').select('*', { count: 'exact', head: true })
+    .eq('status', 'pending').lte('due_date', today);
+  document.getElementById('stat-followups').textContent = followUpCount ?? 0;
+
+  const { data: logs } = await supabase
+    .from('activity_log').select('*')
+    .order('created_at', { ascending: false })
+    .limit(6);
+
+  const box = document.getElementById('recent-activity');
+  if (!logs || logs.length === 0) {
+    box.innerHTML = '<div class="log-row"><span>Nothing logged yet. Actions you take — like adding a prospect — will show up here.</span></div>';
+  } else {
+    box.innerHTML = logs.map(l => `
+      <div class="log-row">
+        <span class="log-time">${timeAgo(l.created_at)}</span>
+        <span class="log-worker">${l.worker_name || '—'}</span>
+        <span>${l.action || ''}</span>
+      </div>
+    `).join('');
+  }
+</script>
+
+</body>
+</html>

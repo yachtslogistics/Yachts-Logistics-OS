@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pipeline — Yacht Logistics OS</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>⚓</text></svg>">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<div class="app-shell">
+  <aside class="sidebar">
+    <div class="sidebar-brand">
+      <div class="mark">⚓</div>
+      <div>
+        <div class="name">Yacht Logistics</div>
+        <div class="sub">Operating System</div>
+      </div>
+    </div>
+    <ul class="nav-list">
+      <li><a href="dashboard.html">Dashboard</a></li>
+      <li><a href="prospects.html">Prospects</a></li>
+      <li><a href="pipeline.html" class="active">Pipeline</a></li>
+      <li><a href="settings.html">Settings</a></li>
+      <li><a href="activity.html">Activity Log</a></li>
+    </ul>
+    <div class="sidebar-footer">
+      <div class="user-email" data-user-email>—</div>
+      <button class="btn-signout" data-signout>Sign out</button>
+    </div>
+  </aside>
+
+  <main class="main" style="max-width: none;">
+    <div class="page-header">
+      <h1>Pipeline</h1>
+      <p>Move a prospect's stage using the dropdown on its card — changes save immediately.</p>
+    </div>
+
+    <div class="kanban" id="kanban-board">
+      <div class="kanban-col"><h3>Loading…</h3></div>
+    </div>
+  </main>
+</div>
+
+<script type="module">
+  import { supabase, requireAuth, wireSignOut, logActivity, STATUS_ORDER, STATUS_LABELS } from './js/supabaseClient.js';
+
+  await requireAuth();
+  wireSignOut();
+
+  const board = document.getElementById('kanban-board');
+
+  function statusOptionsHtml(current) {
+    return STATUS_ORDER.map(s =>
+      `<option value="${s}" ${s === current ? 'selected' : ''}>${STATUS_LABELS[s]}</option>`
+    ).join('');
+  }
+
+  async function updateStatus(id, newStatus, companyName) {
+    const { error } = await supabase.from('prospects')
+      .update({ status: newStatus, updated_at: new Date().toISOString() })
+      .eq('id', id);
+    if (error) { alert(error.message); return; }
+    await logActivity('Manual Entry', `Moved "${companyName}" to ${STATUS_LABELS[newStatus]}`, 'prospects', id, { status: newStatus });
+    await loadBoard();
+  }
+
+  async function loadBoard() {
+    const { data, error } = await supabase.from('prospects').select('*');
+
+    if (error) {
+      board.innerHTML = `<div class="kanban-col"><h3>Error</h3><div class="kanban-empty">${error.message}</div></div>`;
+      return;
+    }
+
+    const byStatus = {};
+    STATUS_ORDER.forEach(s => byStatus[s] = []);
+    (data || []).forEach(p => {
+      const s = p.status && byStatus[p.status] ? p.status : 'discovered';
+      byStatus[s].push(p);
+    });
+
+    board.innerHTML = STATUS_ORDER.map(s => `
+      <div class="kanban-col">
+        <h3><span>${STATUS_LABELS[s]}</span><span>${byStatus[s].length}</span></h3>
+        <div data-col="${s}">
+          ${byStatus[s].length === 0
+            ? '<div class="kanban-empty">Empty</div>'
+            : byStatus[s].map(p => `
+              <div class="kanban-card">
+                <div class="co-name">${escapeHtml(p.company_name || 'Untitled')}</div>
+                <div class="co-meta">${escapeHtml(p.country || '—')} · Score ${p.oman_relevance_score ?? '—'}</div>
+                <select data-move="${p.id}" data-name="${escapeHtml(p.company_name || '')}">
+                  ${statusOptionsHtml(s)}
+                </select>
+              </div>
+            `).join('')
+          }
+        </div>
+      </div>
+    `).join('');
+
+    board.querySelectorAll('[data-move]').forEach(sel => {
+      sel.addEventListener('change', () => {
+        updateStatus(sel.dataset.move, sel.value, sel.dataset.name);
+      });
+    });
+  }
+
+  function escapeHtml(str) {
+    return String(str).replace(/[&<>"']/g, m => ({
+      '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+    }[m]));
+  }
+
+  loadBoard();
+</script>
+
+</body>
+</html>

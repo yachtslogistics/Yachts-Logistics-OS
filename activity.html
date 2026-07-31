@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Activity Log — Yacht Logistics OS</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>⚓</text></svg>">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<div class="app-shell">
+  <aside class="sidebar">
+    <div class="sidebar-brand">
+      <div class="mark">⚓</div>
+      <div>
+        <div class="name">Yacht Logistics</div>
+        <div class="sub">Operating System</div>
+      </div>
+    </div>
+    <ul class="nav-list">
+      <li><a href="dashboard.html">Dashboard</a></li>
+      <li><a href="prospects.html">Prospects</a></li>
+      <li><a href="pipeline.html">Pipeline</a></li>
+      <li><a href="settings.html">Settings</a></li>
+      <li><a href="activity.html" class="active">Activity Log</a></li>
+    </ul>
+    <div class="sidebar-footer">
+      <div class="user-email" data-user-email>—</div>
+      <button class="btn-signout" data-signout>Sign out</button>
+    </div>
+  </aside>
+
+  <main class="main">
+    <div class="page-header">
+      <h1>Activity Log</h1>
+      <p>Every change made in this system, by a person or an AI worker, is recorded here — nothing is silent.</p>
+    </div>
+
+    <div class="panel">
+      <div id="log-list">
+        <div class="log-row"><span>Loading…</span></div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<script type="module">
+  import { supabase, requireAuth, wireSignOut, timeAgo } from './js/supabaseClient.js';
+
+  await requireAuth();
+  wireSignOut();
+
+  const { data, error } = await supabase
+    .from('activity_log').select('*')
+    .order('created_at', { ascending: false })
+    .limit(200);
+
+  const box = document.getElementById('log-list');
+
+  if (error) {
+    box.innerHTML = `<div class="log-row">Error loading log: ${error.message}</div>`;
+  } else if (!data || data.length === 0) {
+    box.innerHTML = '<div class="log-row">Nothing logged yet. Actions like adding a prospect or changing settings will appear here.</div>';
+  } else {
+    box.innerHTML = data.map(l => `
+      <div class="log-row">
+        <span class="log-time">${timeAgo(l.created_at)}</span>
+        <span class="log-worker">${l.worker_name || '—'}</span>
+        <span>${l.action || ''}</span>
+      </div>
+    `).join('');
+  }
+</script>
+
+</body>
+</html>
