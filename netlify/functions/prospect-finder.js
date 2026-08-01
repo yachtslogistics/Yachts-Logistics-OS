@@ -105,6 +105,11 @@ Respond with ONLY a JSON array (no markdown, no explanation) in this exact shape
 ]
 `.trim();
 
+    // Diagnostic switch: ?no_grounding=true runs a plain call with no search
+    // tool attached, purely to test whether Gemini itself is reachable,
+    // separate from any grounding-specific quota issue.
+    const useGrounding = url.searchParams.get('no_grounding') !== 'true';
+
     const geminiRes = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key=${GEMINI_API_KEY}`,
       {
@@ -112,7 +117,7 @@ Respond with ONLY a JSON array (no markdown, no explanation) in this exact shape
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           contents: [{ parts: [{ text: prompt }] }],
-          tools: [{ google_search: {} }]
+          ...(useGrounding ? { tools: [{ google_search: {} }] } : {})
         })
       }
     );
