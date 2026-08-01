@@ -1,32 +1,36 @@
 // Prospect Finder worker
 //
 // What it does, in order:
-// 1. Asks Gemini (with Google Search grounding turned on) to find real
-//    shipping/marine companies that could plausibly need Oman-based
-//    logistics support.
-// 2. Cross-checks EACH company's source URL against the actual grounding
-//    results Gemini returned — not just "did grounding happen somewhere in
-//    the response." A company only survives if its own claimed source
-//    matches a real grounded search result.
+// 1. Asks Groq's "compound" model — which has real, built-in web search —
+//    to find real shipping/marine companies that could plausibly need
+//    Oman-based logistics support.
+//    (We're using Groq for search here, not Gemini, because Gemini's
+//    search-grounding feature is currently hitting free-tier quota errors
+//    industry-wide. Groq's built-in search is free and working reliably
+//    as of this writing. This can be swapped back later if Google fixes it.)
+// 2. Cross-checks EACH company's source URL against the real search results
+//    Groq's tools actually returned — not just "did a search happen
+//    somewhere." A company only survives if its own claimed source matches
+//    something the search tool really found.
 // 3. Skips anything that's already in the `prospects` table (by name).
 // 4. Inserts the rest into Supabase — unless dry-run mode is on, in which
 //    case nothing is written, you just see what WOULD have happened.
 // 5. Writes one summary row to activity_log so the run is visible.
 //
-// Call it with ?dry_run=true first (recommended) to see the results before
-// anything touches your database. Only add &live=true once you've checked
-// the output and you're happy with it.
+// Call it with no `live` param first (dry run, default) to see the results
+// before anything touches your database. Only add &live=true once you've
+// checked the output and you're happy with it.
 //
 // This is meant to be called manually for now (from a browser or a tool
 // like Postman) to test it. Wiring it to a schedule is a later step.
 //
 // Required environment variables (set in Netlify → Environment variables):
-//   GEMINI_API_KEY        - your Gemini API key
-//   SUPABASE_URL           - your Supabase project URL
+//   GROQ_API_KEY           - your Groq API key (already set)
+//   SUPABASE_URL           - your Supabase project URL (already set)
 //   SUPABASE_SERVICE_KEY   - your Supabase SECRET key (not the publishable one —
 //                            this worker runs with no logged-in user, so it
 //                            needs the key that bypasses RLS on purpose)
-//   WORKER_SECRET           - any password you make up yourself, used so random
+//   WORKER_SECRET          - any password you make up yourself, used so random
 //                            people on the internet can't trigger this and burn
 //                            your free API quota
 
@@ -45,12 +49,12 @@ export default async (req) => {
       return jsonResponse(401, { error: 'Missing or incorrect x-worker-secret header.' });
     }
 
-    const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
+    const GROQ_API_KEY = process.env.GROQ_API_KEY;
     const SUPABASE_URL = process.env.SUPABASE_URL;
     const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY;
 
-    if (!GEMINI_API_KEY || !SUPABASE_URL || !SUPABASE_SERVICE_KEY) {
-      return jsonResponse(500, { error: 'Missing one of GEMINI_API_KEY, SUPABASE_URL, SUPABASE_SERVICE_KEY in environment variables.' });
+    if (!GROQ_API_KEY || !SUPABASE_URL || !SUPABASE_SERVICE_KEY) {
+      return jsonResponse(500, { error: 'Missing one of GROQ_API_KEY, SUPABASE_URL, SUPABASE_SERVICE_KEY in environment variables.' });
     }
 
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
@@ -63,7 +67,7 @@ export default async (req) => {
     // passes live=true. Dry runs show you exactly what would happen.
     const isLive = url.searchParams.get('live') === 'true';
 
-    // --- 2. Pull existing company names so Gemini can be told to avoid duplicates ---
+    // --- 2. Pull existing company names so the model can be told to avoid duplicates ---
     const { data: existing, error: existingError } = await supabase
       .from('prospects')
       .select('company_name');
@@ -74,16 +78,17 @@ export default async (req) => {
 
     const existingNames = (existing || []).map(p => (p.company_name || '').toLowerCase());
 
-    // --- 3. Ask Gemini, with real web search grounding turned on ---
+    // --- 3. Ask Groq's compound model, which has real web search built in ---
     const prompt = `
 You are researching real companies for a marine and offshore logistics business
 based in Oman (ports: Sohar, Duqm, Salalah, Muscat) that wants to find potential
 clients or partners.
 
-Find up to ${limit} REAL companies (not invented) that are shipowners, ship
-managers, vessel operators, charterers, shipbrokers, freight forwarders,
-offshore/marine service companies, or overseas agents who may plausibly need
-logistics, husbandry, crew change, or port agency support in Oman.
+Use your web search tool to find up to ${limit} REAL companies (not invented)
+that are shipowners, ship managers, vessel operators, charterers, shipbrokers,
+freight forwarders, offshore/marine service companies, or overseas agents who
+may plausibly need logistics, husbandry, crew change, or port agency support
+in Oman.
 
 Do not include any of these companies, they are already known:
 ${existingNames.length ? existingNames.join(', ') : '(none yet)'}
@@ -92,7 +97,8 @@ For each company, return only information you can support with a real source
 you found via search. If you cannot find a real source URL for a company,
 leave it out entirely rather than guessing.
 
-Respond with ONLY a JSON array (no markdown, no explanation) in this exact shape:
+Respond with ONLY a JSON array (no markdown, no explanation, no text before or
+after it) in this exact shape:
 [
   {
     "company_name": "string",
@@ -105,40 +111,33 @@ Respond with ONLY a JSON array (no markdown, no explanation) in this exact shape
 ]
 `.trim();
 
-    // Diagnostic switch: ?no_grounding=true runs a plain call with no search
-    // tool attached, purely to test whether Gemini itself is reachable,
-    // separate from any grounding-specific quota issue.
-    const useGrounding = url.searchParams.get('no_grounding') !== 'true';
+    const groqRes = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${GROQ_API_KEY}`
+      },
+      body: JSON.stringify({
+        model: 'groq/compound',
+        messages: [{ role: 'user', content: prompt }]
+      })
+    });
 
-    const geminiRes = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key=${GEMINI_API_KEY}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: prompt }] }],
-          ...(useGrounding ? { tools: [{ google_search: {} }] } : {})
-        })
-      }
-    );
-
-    if (!geminiRes.ok) {
-      const errText = await geminiRes.text();
-      return jsonResponse(502, { error: `Gemini request failed: ${errText}` });
+    if (!groqRes.ok) {
+      const errText = await groqRes.text();
+      return jsonResponse(502, { error: `Groq request failed: ${errText}` });
     }
 
-    const geminiData = await geminiRes.json();
-    const candidate = geminiData.candidates && geminiData.candidates[0];
-    const rawText = candidate?.content?.parts?.map(p => p.text).join('') || '';
+    const groqData = await groqRes.json();
+    const message = groqData.choices && groqData.choices[0] && groqData.choices[0].message;
+    const rawText = message?.content || '';
 
-    // Pull out the actual list of URLs Gemini's search grounding really
-    // returned. This is the ground truth we check every company against —
-    // not just "grounding happened somewhere."
-    const groundingChunks = candidate?.groundingMetadata?.groundingChunks || [];
-    const groundedHosts = groundingChunks
-      .map(chunk => chunk?.web?.uri)
-      .filter(Boolean)
-      .map(uri => safeHostname(uri))
+    // Pull every real URL out of the tools Groq's compound system actually
+    // executed. This is the ground truth we check each company against —
+    // not just "a search happened somewhere."
+    const executedToolsRaw = JSON.stringify(message?.executed_tools || []);
+    const groundedHosts = [...executedToolsRaw.matchAll(/https?:\/\/[^\s"'\\]+/g)]
+      .map(m => safeHostname(m[0]))
       .filter(Boolean);
 
     let companies = [];
@@ -146,15 +145,15 @@ Respond with ONLY a JSON array (no markdown, no explanation) in this exact shape
       const cleaned = rawText.replace(/```json/gi, '').replace(/```/g, '').trim();
       companies = JSON.parse(cleaned);
     } catch (e) {
-      return jsonResponse(502, { error: 'Could not parse Gemini output as JSON.', raw: rawText.slice(0, 800) });
+      return jsonResponse(502, { error: 'Could not parse Groq output as JSON.', raw: rawText.slice(0, 800) });
     }
 
     if (groundedHosts.length === 0) {
-      await logActivity(supabase, 'Prospect Finder', 'Run aborted — no real search grounding returned, refusing to insert unverified data.', null, { attempted: companies.length });
-      return jsonResponse(200, { inserted: 0, skipped: 0, reason: 'No search grounding present in Gemini response — nothing inserted for safety.' });
+      await logActivity(supabase, 'Prospect Finder', 'Run aborted — no real search results returned by the tool, refusing to insert unverified data.', null, { attempted: companies.length });
+      return jsonResponse(200, { inserted: 0, skipped: 0, reason: 'No web search results present in the response — nothing inserted for safety.' });
     }
 
-    // --- 4. Filter, dedupe, verify each source against real grounding, and insert ---
+    // --- 4. Filter, dedupe, verify each source against real search results, and insert ---
     let inserted = 0;
     let skippedDuplicate = 0;
     let skippedNoEvidence = 0;
@@ -172,9 +171,9 @@ Respond with ONLY a JSON array (no markdown, no explanation) in this exact shape
         continue;
       }
 
-      // The company's claimed source must match a host Gemini's search
-      // grounding actually returned. This stops a company slipping through
-      // with a source URL Gemini invented rather than actually found.
+      // The company's claimed source must match a host the search tool
+      // actually returned. This stops a company slipping through with a
+      // source URL the model invented rather than actually found.
       const claimedHost = safeHostname(c.source_url);
       const isVerified = claimedHost && groundedHosts.some(h => h === claimedHost || h.endsWith(`.${claimedHost}`) || claimedHost.endsWith(`.${h}`));
 
