@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Drafts — Yacht Logistics OS</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>⚓</text></svg>">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<div class="app-shell">
+  <aside class="sidebar">
+    <div class="sidebar-brand">
+      <div class="mark">⚓</div>
+      <div>
+        <div class="name">Yacht Logistics</div>
+        <div class="sub">Operating System</div>
+      </div>
+    </div>
+    <ul class="nav-list">
+      <li><a href="dashboard.html">Dashboard</a></li>
+      <li><a href="prospects.html">Prospects</a></li>
+      <li><a href="pipeline.html">Pipeline</a></li>
+      <li><a href="drafts.html" class="active">Drafts</a></li>
+      <li><a href="console.html">Console</a></li>
+      <li><a href="settings.html">Settings</a></li>
+      <li><a href="activity.html">Activity Log</a></li>
+    </ul>
+    <div class="sidebar-footer">
+      <div class="user-email" data-user-email>—</div>
+      <button class="btn-signout" data-signout>Sign out</button>
+    </div>
+  </aside>
+
+  <main class="main">
+    <div class="page-header">
+      <h1>Drafts</h1>
+      <p>Every AI-written email lands here first. Nothing sends until you approve it and send it yourself.</p>
+    </div>
+
+    <div class="panel">
+      <div class="panel-header">
+        <h2>Awaiting your review</h2>
+      </div>
+      <div id="drafts-list">
+        <div class="log-row">Loading…</div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-header">
+        <h2>Already handled</h2>
+      </div>
+      <div id="drafts-handled">
+        <div class="log-row">Loading…</div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<script type="module">
+  import { supabase, requireAuth, wireSignOut, timeAgo } from './js/supabaseClient.js';
+
+  await requireAuth();
+  wireSignOut();
+
+  function escapeHtml(str) {
+    return String(str).replace(/[&<>"']/g, m => ({
+      '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+    }[m]));
+  }
+
+  function draftCard(d, editable) {
+    const companyName = d.prospects?.company_name || 'Unknown company';
+    return `
+      <div class="panel" style="margin-bottom: 12px;" data-draft-id="${d.id}">
+        <div class="panel-header">
+          <h2 style="font-size: 14px;">${escapeHtml(companyName)} <span style="color: var(--text-faint); font-weight: 400;">· ${escapeHtml(d.template_type || 'general')}</span></h2>
+          <span class="badge badge-${d.status === 'approved' ? 'approved' : d.status === 'rejected' ? 'lost' : 'draft_ready'}">${escapeHtml(d.status || 'draft')}</span>
+        </div>
+        <label>Subject</label>
+        <input type="text" value="${escapeHtml(d.subject || '')}" ${editable ? '' : 'disabled'} data-field="subject">
+        <label>Body</label>
+        <textarea style="min-height: 140px;" ${editable ? '' : 'disabled'} data-field="body">${escapeHtml(d.body || '')}</textarea>
+        <div style="color: var(--text-faint); font-size: 11px; margin: -8px 0 12px 0;">Created ${timeAgo(d.created_at)}</div>
+        ${editable ? `
+          <div class="form-actions">
+            <button class="btn btn-primary btn-sm" data-action="save">Save edits</button>
+            <button class="btn btn-secondary btn-sm" data-action="approve">Approve</button>
+            <button class="btn-danger-text" data-action="reject">Reject</button>
+          </div>
+        ` : ''}
+      </div>
+    `;
+  }
+
+  async function updateDraft(id, patch) {
+    const { error } = await supabase.from('email_drafts').update(patch).eq('id', id);
+    if (error) { alert(error.message); return; }
+    await supabase.from('activity_log').insert({
+      worker_name: 'Manual Review',
+      action: `Draft ${patch.status || 'updated'}`,
+      target_table: 'email_drafts',
+      target_id: id,
+      detail: patch
+    });
+    await loadDrafts();
+  }
+
+  function wireCard(container) {
+    container.querySelectorAll('[data-draft-id]').forEach(card => {
+      const id = card.dataset.draftId;
+      const saveBtn = card.querySelector('[data-action="save"]');
+      const approveBtn = card.querySelector('[data-action="approve"]');
+      const rejectBtn = card.querySelector('[data-action="reject"]');
+
+      if (saveBtn) saveBtn.addEventListener('click', () => {
+        updateDraft(id, {
+          subject: card.querySelector('[data-field="subject"]').value,
+          body: card.querySelector('[data-field="body"]').value
+        });
+      });
+      if (approveBtn) approveBtn.addEventListener('click', () => {
+        updateDraft(id, {
+          subject: card.querySelector('[data-field="subject"]').value,
+          body: card.querySelector('[data-field="body"]').value,
+          status: 'approved',
+          approved_by: 'You'
+        });
+      });
+      if (rejectBtn) rejectBtn.addEventListener('click', () => {
+        updateDraft(id, { status: 'rejected' });
+      });
+    });
+  }
+
+  async function loadDrafts() {
+    const { data, error } = await supabase
+      .from('email_drafts')
+      .select('*, prospects(company_name)')
+      .order('created_at', { ascending: false });
+
+    const pending = document.getElementById('drafts-list');
+    const handled = document.getElementById('drafts-handled');
+
+    if (error) {
+      pending.innerHTML = `<div class="log-row">Error loading drafts: ${error.message}</div>`;
+      handled.innerHTML = '';
+      return;
+    }
+
+    const pendingDrafts = (data || []).filter(d => d.status === 'draft');
+    const handledDrafts = (data || []).filter(d => d.status !== 'draft');
+
+    pending.innerHTML = pendingDrafts.length
+      ? pendingDrafts.map(d => draftCard(d, true)).join('')
+      : '<div class="log-row">No drafts waiting. Once the Outreach Writer is built, AI-generated emails will show up here for your approval — nothing sends automatically.</div>';
+
+    handled.innerHTML = handledDrafts.length
+      ? handledDrafts.map(d => draftCard(d, false)).join('')
+      : '<div class="log-row">Nothing approved or rejected yet.</div>';
+
+    wireCard(pending);
+  }
+
+  await loadDrafts();
+  setInterval(loadDrafts, 30000);
+</script>
+
+</body>
+</html>
