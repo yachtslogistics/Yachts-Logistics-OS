@@ -387,14 +387,17 @@ tr:last-child td { border-bottom: none; }
 /* ---------- Kanban (pipeline) ---------- */
 
 .kanban {
-  display: flex;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  align-items: start;
   gap: 12px;
-  overflow-x: auto;
-  padding-bottom: 10px;
+  width: 100%;
+  overflow-x: visible;
+  padding-bottom: 0;
 }
 
 .kanban-col {
-  flex: 0 0 220px;
+  min-width: 0;
   background: var(--panel);
   border: 1px solid var(--panel-border);
   border-radius: var(--radius);
