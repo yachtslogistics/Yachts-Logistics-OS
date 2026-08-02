@@ -53,26 +53,31 @@
   await requireAuth();
   wireSignOut();
 
-  const { data, error } = await supabase
-    .from('activity_log').select('*')
-    .order('created_at', { ascending: false })
-    .limit(200);
+  async function loadLog() {
+    const { data, error } = await supabase
+      .from('activity_log').select('*')
+      .order('created_at', { ascending: false })
+      .limit(200);
 
-  const box = document.getElementById('log-list');
+    const box = document.getElementById('log-list');
 
-  if (error) {
-    box.innerHTML = `<div class="log-row">Error loading log: ${error.message}</div>`;
-  } else if (!data || data.length === 0) {
-    box.innerHTML = '<div class="log-row">Nothing logged yet. Actions like adding a prospect or changing settings will appear here.</div>';
-  } else {
-    box.innerHTML = data.map(l => `
-      <div class="log-row">
-        <span class="log-time">${timeAgo(l.created_at)}</span>
-        <span class="log-worker">${l.worker_name || '—'}</span>
-        <span>${l.action || ''}</span>
-      </div>
-    `).join('');
+    if (error) {
+      box.innerHTML = `<div class="log-row">Error loading log: ${error.message}</div>`;
+    } else if (!data || data.length === 0) {
+      box.innerHTML = '<div class="log-row">Nothing logged yet. Actions like adding a prospect or changing settings will appear here.</div>';
+    } else {
+      box.innerHTML = data.map(l => `
+        <div class="log-row">
+          <span class="log-time">${timeAgo(l.created_at)}</span>
+          <span class="log-worker">${l.worker_name || '—'}</span>
+          <span>${l.action || ''}</span>
+        </div>
+      `).join('');
+    }
   }
+
+  await loadLog();
+  setInterval(loadLog, 30000);
 </script>
 
 </body>

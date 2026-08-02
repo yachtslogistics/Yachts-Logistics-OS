@@ -36,7 +36,7 @@
   <main class="main">
     <div class="page-header">
       <h1>Dashboard</h1>
-      <p>Business development overview.</p>
+      <p>Business development overview. <span id="last-updated" style="color: var(--accent);"></span></p>
     </div>
 
     <div class="stat-grid">
@@ -79,43 +79,51 @@
   await requireAuth();
   wireSignOut();
 
-  const { count: prospectCount } = await supabase
-    .from('prospects').select('*', { count: 'exact', head: true });
-  document.getElementById('stat-prospects').textContent = prospectCount ?? 0;
+  async function loadDashboard() {
+    const { count: prospectCount } = await supabase
+      .from('prospects').select('*', { count: 'exact', head: true });
+    document.getElementById('stat-prospects').textContent = prospectCount ?? 0;
 
-  const { count: draftCount } = await supabase
-    .from('email_drafts').select('*', { count: 'exact', head: true })
-    .eq('status', 'draft');
-  document.getElementById('stat-drafts').textContent = draftCount ?? 0;
+    const { count: draftCount } = await supabase
+      .from('email_drafts').select('*', { count: 'exact', head: true })
+      .eq('status', 'draft');
+    document.getElementById('stat-drafts').textContent = draftCount ?? 0;
 
-  const { count: replyCount } = await supabase
-    .from('replies').select('*', { count: 'exact', head: true })
-    .eq('handled', false);
-  document.getElementById('stat-replies').textContent = replyCount ?? 0;
+    const { count: replyCount } = await supabase
+      .from('replies').select('*', { count: 'exact', head: true })
+      .eq('handled', false);
+    document.getElementById('stat-replies').textContent = replyCount ?? 0;
 
-  const today = new Date().toISOString().slice(0, 10);
-  const { count: followUpCount } = await supabase
-    .from('follow_ups').select('*', { count: 'exact', head: true })
-    .eq('status', 'pending').lte('due_date', today);
-  document.getElementById('stat-followups').textContent = followUpCount ?? 0;
+    const today = new Date().toISOString().slice(0, 10);
+    const { count: followUpCount } = await supabase
+      .from('follow_ups').select('*', { count: 'exact', head: true })
+      .eq('status', 'pending').lte('due_date', today);
+    document.getElementById('stat-followups').textContent = followUpCount ?? 0;
 
-  const { data: logs } = await supabase
-    .from('activity_log').select('*')
-    .order('created_at', { ascending: false })
-    .limit(6);
+    const { data: logs } = await supabase
+      .from('activity_log').select('*')
+      .order('created_at', { ascending: false })
+      .limit(6);
 
-  const box = document.getElementById('recent-activity');
-  if (!logs || logs.length === 0) {
-    box.innerHTML = '<div class="log-row"><span>Nothing logged yet. Actions you take — like adding a prospect — will show up here.</span></div>';
-  } else {
-    box.innerHTML = logs.map(l => `
-      <div class="log-row">
-        <span class="log-time">${timeAgo(l.created_at)}</span>
-        <span class="log-worker">${l.worker_name || '—'}</span>
-        <span>${l.action || ''}</span>
-      </div>
-    `).join('');
+    const box = document.getElementById('recent-activity');
+    if (!logs || logs.length === 0) {
+      box.innerHTML = '<div class="log-row"><span>Nothing logged yet. Actions you take — like adding a prospect — will show up here.</span></div>';
+    } else {
+      box.innerHTML = logs.map(l => `
+        <div class="log-row">
+          <span class="log-time">${timeAgo(l.created_at)}</span>
+          <span class="log-worker">${l.worker_name || '—'}</span>
+          <span>${l.action || ''}</span>
+        </div>
+      `).join('');
+    }
+
+    const stamp = document.getElementById('last-updated');
+    if (stamp) stamp.textContent = 'Live · updated ' + timeAgo(new Date().toISOString());
   }
+
+  await loadDashboard();
+  setInterval(loadDashboard, 30000);
 </script>
 
 </body>

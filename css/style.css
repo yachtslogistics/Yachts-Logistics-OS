@@ -388,16 +388,11 @@ tr:last-child td { border-bottom: none; }
 
 .kanban {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  align-items: start;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
   gap: 12px;
-  width: 100%;
-  overflow-x: visible;
-  padding-bottom: 0;
 }
 
 .kanban-col {
-  min-width: 0;
   background: var(--panel);
   border: 1px solid var(--panel-border);
   border-radius: var(--radius);

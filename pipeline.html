@@ -116,7 +116,8 @@
     }[m]));
   }
 
-  loadBoard();
+  await loadBoard();
+  setInterval(loadBoard, 30000);
 </script>
 
 </body>
