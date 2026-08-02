@@ -71,8 +71,8 @@ export function statusBadge(status) {
 export function timeAgo(iso) {
   if (!iso) return '';
   const d = new Date(iso);
-  return d.toLocaleString('en-GB', {
+  return d.toLocaleString('en-US', {
     timeZone: 'Asia/Muscat',
-    month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
-  }) + ' Oman time';
+    month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true
+  });
 }
