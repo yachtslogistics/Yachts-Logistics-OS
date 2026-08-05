@@ -10,22 +10,21 @@
 <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
-
 <div class="app-shell">
   <aside class="sidebar">
     <div class="sidebar-brand">
       <div class="mark">⚓</div>
-      <div>
-        <div class="name">Yacht Logistics</div>
-        <div class="sub">Operating System</div>
-      </div>
+      <div><div class="name">Yacht Logistics</div><div class="sub">Operating System</div></div>
     </div>
     <ul class="nav-list">
       <li><a href="dashboard.html" class="active">Dashboard</a></li>
       <li><a href="prospects.html">Prospects</a></li>
+      <li><a href="contacts.html">Contacts</a></li>
+      <li><a href="partners.html">Partners</a></li>
       <li><a href="pipeline.html">Pipeline</a></li>
       <li><a href="drafts.html">Drafts</a></li>
       <li><a href="console.html">Console</a></li>
+      <li><a href="usage.html">Usage</a></li>
       <li><a href="settings.html">Settings</a></li>
       <li><a href="activity.html">Activity Log</a></li>
     </ul>
@@ -38,28 +37,28 @@
   <main class="main">
     <div class="page-header">
       <h1>Dashboard</h1>
-      <p>Business development overview. <span id="last-updated" style="color: var(--accent);"></span></p>
+      <p><span class="live-dot"></span>Business-development overview. <span id="last-updated"></span></p>
     </div>
 
-    <div class="stat-grid">
-      <div class="stat-card">
-        <div class="label">Total prospects</div>
-        <div class="value" id="stat-prospects">—</div>
+    <div class="stat-grid stat-grid-6">
+      <div class="stat-card"><div class="label">Prospects</div><div class="value" id="stat-prospects">—</div></div>
+      <div class="stat-card"><div class="label">Verified contacts</div><div class="value" id="stat-contacts">—</div></div>
+      <div class="stat-card"><div class="label">Partners</div><div class="value" id="stat-partners">—</div></div>
+      <div class="stat-card"><div class="label">Drafts to review</div><div class="value" id="stat-drafts">—</div></div>
+      <div class="stat-card"><div class="label">Unhandled replies</div><div class="value" id="stat-replies">—</div></div>
+      <div class="stat-card"><div class="label">Follow-ups due</div><div class="value" id="stat-followups">—</div></div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-header">
+        <div>
+          <h2>Worker status</h2>
+          <div class="panel-subtext">Latest recorded action for each active research worker.</div>
+        </div>
+        <a href="console.html" class="btn btn-secondary btn-sm">Open Console</a>
       </div>
-      <div class="stat-card">
-        <div class="label">Drafts awaiting approval</div>
-        <div class="value" id="stat-drafts">—</div>
-        <div class="note">No AI worker running yet — Milestone 2</div>
-      </div>
-      <div class="stat-card">
-        <div class="label">Unhandled replies</div>
-        <div class="value" id="stat-replies">—</div>
-        <div class="note">No AI worker running yet — Milestone 2</div>
-      </div>
-      <div class="stat-card">
-        <div class="label">Follow-ups due today</div>
-        <div class="value" id="stat-followups">—</div>
-        <div class="note">No AI worker running yet — Milestone 2</div>
+      <div id="worker-status-grid" class="worker-grid">
+        <div class="mini-card"><div class="muted">Loading worker status…</div></div>
       </div>
     </div>
 
@@ -81,52 +80,89 @@
   await requireAuth();
   wireSignOut();
 
+  const trackedWorkers = ['Prospect Finder', 'Relevance Scorer', 'Contact Finder'];
+
+  function escapeHtml(value) {
+    return String(value ?? '').replace(/[&<>"']/g, m => ({
+      '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
+    }[m]));
+  }
+
+  function workerState(action) {
+    const a = String(action || '').toLowerCase();
+    if (a.includes('failed') || a.includes('error')) return ['Issue', 'state-fail'];
+    if (a.includes('skipped') || a.includes('aborted') || a.includes('budget')) return ['Protected / skipped', 'state-warn'];
+    if (a.includes('complete') || a.includes('found') || a.includes('scored') || a.includes('inserted')) return ['Working', 'state-ok'];
+    return ['Recorded', ''];
+  }
+
+  async function countTable(table, apply) {
+    try {
+      let q = supabase.from(table).select('*', { count: 'exact', head: true });
+      if (apply) q = apply(q);
+      const { count, error } = await q;
+      return error ? 0 : (count ?? 0);
+    } catch (_) { return 0; }
+  }
+
   async function loadDashboard() {
-    const { count: prospectCount } = await supabase
-      .from('prospects').select('*', { count: 'exact', head: true });
-    document.getElementById('stat-prospects').textContent = prospectCount ?? 0;
-
-    const { count: draftCount } = await supabase
-      .from('email_drafts').select('*', { count: 'exact', head: true })
-      .eq('status', 'draft');
-    document.getElementById('stat-drafts').textContent = draftCount ?? 0;
-
-    const { count: replyCount } = await supabase
-      .from('replies').select('*', { count: 'exact', head: true })
-      .eq('handled', false);
-    document.getElementById('stat-replies').textContent = replyCount ?? 0;
-
     const today = new Date().toISOString().slice(0, 10);
-    const { count: followUpCount } = await supabase
-      .from('follow_ups').select('*', { count: 'exact', head: true })
-      .eq('status', 'pending').lte('due_date', today);
-    document.getElementById('stat-followups').textContent = followUpCount ?? 0;
 
-    const { data: logs } = await supabase
-      .from('activity_log').select('*')
-      .order('created_at', { ascending: false })
-      .limit(6);
+    const [prospects, contacts, partners, drafts, replies, followups, logsResult] = await Promise.all([
+      countTable('prospects'),
+      countTable('contacts', q => q.eq('verified', true)),
+      countTable('partners'),
+      countTable('email_drafts', q => q.eq('status', 'draft')),
+      countTable('replies', q => q.eq('handled', false)),
+      countTable('follow_ups', q => q.eq('status', 'pending').lte('due_date', today)),
+      supabase.from('activity_log').select('*').order('created_at', { ascending: false }).limit(120)
+    ]);
 
-    const box = document.getElementById('recent-activity');
-    if (!logs || logs.length === 0) {
-      box.innerHTML = '<div class="log-row"><span>Nothing logged yet. Actions you take — like adding a prospect — will show up here.</span></div>';
+    document.getElementById('stat-prospects').textContent = prospects;
+    document.getElementById('stat-contacts').textContent = contacts;
+    document.getElementById('stat-partners').textContent = partners;
+    document.getElementById('stat-drafts').textContent = drafts;
+    document.getElementById('stat-replies').textContent = replies;
+    document.getElementById('stat-followups').textContent = followups;
+
+    const logs = logsResult.data || [];
+    const recentBox = document.getElementById('recent-activity');
+    if (logs.length === 0) {
+      recentBox.innerHTML = '<div class="log-row"><span>Nothing logged yet.</span></div>';
     } else {
-      box.innerHTML = logs.map(l => `
+      recentBox.innerHTML = logs.slice(0, 7).map(l => `
         <div class="log-row">
-          <span class="log-time">${timeAgo(l.created_at)}</span>
-          <span class="log-worker">${l.worker_name || '—'}</span>
-          <span>${l.action || ''}</span>
+          <span class="log-time">${escapeHtml(timeAgo(l.created_at))}</span>
+          <span class="log-worker">${escapeHtml(l.worker_name || '—')}</span>
+          <span>${escapeHtml(l.action || '')}</span>
         </div>
       `).join('');
     }
 
-    const stamp = document.getElementById('last-updated');
-    if (stamp) stamp.textContent = 'Live · updated ' + timeAgo(new Date().toISOString());
+    const statusBox = document.getElementById('worker-status-grid');
+    statusBox.innerHTML = trackedWorkers.map(worker => {
+      const last = logs.find(l => l.worker_name === worker);
+      if (!last) {
+        return `<div class="mini-card">
+          <div class="mini-title">${escapeHtml(worker)}</div>
+          <div class="worker-state muted">No recent log</div>
+          <div class="mini-note">Waiting for the next recorded run</div>
+        </div>`;
+      }
+      const [label, cls] = workerState(last.action);
+      return `<div class="mini-card">
+        <div class="mini-title">${escapeHtml(worker)}</div>
+        <div class="worker-state ${cls}">${escapeHtml(label)}</div>
+        <div class="mini-note">${escapeHtml(timeAgo(last.created_at))}</div>
+        <div class="worker-action">${escapeHtml(last.action || '')}</div>
+      </div>`;
+    }).join('');
+
+    document.getElementById('last-updated').textContent = 'Updated ' + timeAgo(new Date().toISOString());
   }
 
   await loadDashboard();
-  setInterval(loadDashboard, 30000);
+  setInterval(loadDashboard, 20000);
 </script>
-
 </body>
 </html>

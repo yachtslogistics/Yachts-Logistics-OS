@@ -1,0 +1,123 @@
+YACHT LOGISTICS OS — v6 DEPLOYMENT
+==================================
+
+This ZIP is built directly on your uploaded v5. It does not replace your working
+Prospect Finder, Relevance Scorer, Contact Finder V4, or AI Router.
+
+WHAT v6 ADDS
+------------
+- Contacts page (reads the real contacts table)
+- Partners page (reads the real partners table)
+- API Usage page (reads api_usage)
+- Dashboard counts for prospects, verified contacts, partners, drafts, replies,
+  and follow-ups
+- Live worker-status cards from activity_log
+- Updated navigation on every page
+- Settings section for the Operational Partnership Model
+- Outreach Writer v1 Worker source (drafts only; NEVER sends)
+- Backup copy of your current Contact Finder V4
+- SQL files needed by the new Settings/Usage screens
+
+STEP 1 — DATABASE (ONE TIME)
+-----------------------------
+In Supabase > SQL Editor, run:
+
+1) sql/api-usage-ledger.sql
+   - If you already ran the usage-ledger setup, running it again is safe.
+
+2) sql/add-operational-partnership-model.sql
+   - Adds the dedicated Operational Partnership Model field used in Settings.
+
+STEP 2 — WEBSITE
+----------------
+Upload the WEBSITE files/folders from this ZIP to the same GitHub repo that
+currently hosts your v5 site.
+
+Overwrite the old files when GitHub asks.
+
+Important:
+- Keep js/supabaseClient.js exactly as included.
+- Do NOT upload any Cloudflare API secret into the website.
+- Cloudflare Pages should redeploy automatically from GitHub.
+
+After deploy, log in and check:
+Dashboard -> Contacts -> Partners -> Drafts -> Console -> Usage -> Settings
+
+STEP 3 — OUTREACH WRITER (NEW WORKER)
+--------------------------------------
+The file is:
+workers/outreach-writer-v1.js
+
+It creates personalized email drafts only. It never sends email.
+
+Create a new Cloudflare Worker named:
+outreach-writer
+
+Paste the entire contents of workers/outreach-writer-v1.js.
+
+Add these Variables / Secrets:
+- GEMINI_API_KEY          Secret
+- SUPABASE_URL            Plain text
+- SUPABASE_SERVICE_KEY    Secret
+- WORKER_SECRET           Secret
+
+Use the same real values you already use in the Relevance Scorer.
+Do NOT type secrets into browser scripts.
+
+FIRST TEST — DRY RUN
+--------------------
+Open your browser console (F12 -> Console) and paste:
+
+const workerUrl = prompt("Paste Outreach Writer Worker URL");
+const secret = prompt("Enter Outreach Writer WORKER_SECRET");
+
+fetch(workerUrl + "?batch=1", {
+  headers: { "x-worker-secret": secret }
+})
+.then(async r => {
+  console.log("HTTP STATUS:", r.status);
+  console.log(await r.text());
+})
+.catch(console.error);
+
+A successful dry run should say:
+DRY RUN — no drafts were written.
+
+SECOND TEST — LIVE
+------------------
+Only after the dry run looks correct:
+
+const workerUrl = prompt("Paste Outreach Writer Worker URL");
+const secret = prompt("Enter Outreach Writer WORKER_SECRET");
+
+fetch(workerUrl + "?batch=1&live=true", {
+  headers: { "x-worker-secret": secret }
+})
+.then(async r => {
+  console.log("HTTP STATUS:", r.status);
+  console.log(await r.text());
+})
+.catch(console.error);
+
+Then open Drafts in the website. The new draft should appear there for review.
+
+CRON — ONLY AFTER BOTH TESTS PASS
+---------------------------------
+Cloudflare Worker -> Settings -> Triggers -> Cron Trigger
+
+Use:
+45 */6 * * *
+
+The Worker checks up to 5 ready prospects per scheduled run, uses one Gemini
+request for the batch, and self-caps to 2 real Outreach Writer Gemini calls per
+Oman calendar day.
+
+IMPORTANT SAFETY
+----------------
+- Writer NEVER sends email.
+- Every draft stays status="draft" until you review it.
+- Contact Finder V4 remains unchanged and is backed up in:
+  workers/contact-finder-v4-current.js
+- AI Router is not changed by this ZIP.
+- The Writer uses the existing Gemini-style workflow instead of guessing a
+  missing Router v2 endpoint contract.

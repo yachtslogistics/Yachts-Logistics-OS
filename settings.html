@@ -10,22 +10,21 @@
 <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
-
 <div class="app-shell">
   <aside class="sidebar">
     <div class="sidebar-brand">
       <div class="mark">⚓</div>
-      <div>
-        <div class="name">Yacht Logistics</div>
-        <div class="sub">Operating System</div>
-      </div>
+      <div><div class="name">Yacht Logistics</div><div class="sub">Operating System</div></div>
     </div>
     <ul class="nav-list">
       <li><a href="dashboard.html">Dashboard</a></li>
       <li><a href="prospects.html">Prospects</a></li>
+      <li><a href="contacts.html">Contacts</a></li>
+      <li><a href="partners.html">Partners</a></li>
       <li><a href="pipeline.html">Pipeline</a></li>
       <li><a href="drafts.html">Drafts</a></li>
       <li><a href="console.html">Console</a></li>
+      <li><a href="usage.html">Usage</a></li>
       <li><a href="settings.html" class="active">Settings</a></li>
       <li><a href="activity.html">Activity Log</a></li>
     </ul>
@@ -38,32 +37,62 @@
   <main class="main">
     <div class="page-header">
       <h1>Settings</h1>
-      <p>This is the "company brain" every future AI worker will read from — get it right once.</p>
+      <p>The company brain used by present and future AI workers. Keep these facts accurate.</p>
     </div>
 
     <div class="panel">
       <form id="settings-form">
-        <label for="services">Services offered (one per line)</label>
-        <textarea id="services" placeholder="Vessel husbandry
-Crew changes
-Port agency"></textarea>
+        <div class="settings-section">
+          <div class="settings-section-title">Company capabilities</div>
 
-        <label for="ports_covered">Ports covered (one per line)</label>
-        <textarea id="ports_covered" placeholder="Sohar
+          <label for="services">Services offered (one per line)</label>
+          <textarea id="services" placeholder="Ship agency services
+Crew change
+Port clearance & documentation
+Customs coordination
+Provision supply
+Fresh water supply
+Bunker coordination
+Transport
+Offshore & STS support
+Vessel cleaning
+Warehousing
+Logistics solutions"></textarea>
+
+          <label for="ports_covered">Ports covered (one per line)</label>
+          <textarea id="ports_covered" placeholder="Shinas
+Sohar
+Muscat
 Duqm
 Salalah"></textarea>
+        </div>
 
-        <label for="approved_claims">Approved claims (things it's okay to say about the company)</label>
-        <textarea id="approved_claims"></textarea>
+        <div class="settings-section">
+          <div class="settings-section-title">Operational partnership model</div>
+          <label for="operational_partnership_model">How Oman sub-agency / operational partnerships work</label>
+          <textarea id="operational_partnership_model" class="tall-textarea" placeholder="Established shipping or marine companies in Oman may keep the vessel/client relationship while Yacht Logistics executes agreed local operational work under the appointed/licensed agent's authority."></textarea>
+          <div id="partnership-field-note" class="field-note"></div>
+        </div>
 
-        <label for="forbidden_claims">Forbidden claims (things it must never say)</label>
-        <textarea id="forbidden_claims"></textarea>
+        <div class="settings-section">
+          <div class="settings-section-title">AI communication rules</div>
 
-        <label for="signature">Email signature</label>
-        <textarea id="signature"></textarea>
+          <label for="approved_claims">Approved claims (things it is okay to say about the company)</label>
+          <textarea id="approved_claims"></textarea>
 
-        <label for="daily_max">Daily sending limit (max outreach emails/day)</label>
-        <input type="number" id="daily_max" min="0" value="20">
+          <label for="forbidden_claims">Forbidden claims (things it must never say)</label>
+          <textarea id="forbidden_claims"></textarea>
+
+          <label for="signature">Email signature</label>
+          <textarea id="signature" class="tall-textarea"></textarea>
+        </div>
+
+        <div class="settings-section">
+          <div class="settings-section-title">Outreach controls</div>
+          <label for="daily_max">Daily sending limit (max outreach emails/day)</label>
+          <input type="number" id="daily_max" min="0" value="20">
+          <div class="field-note">Approval remains required before sending. This number is a ceiling, not an instruction to send automatically.</div>
+        </div>
 
         <div class="error-text" id="settings-error"></div>
         <div class="form-actions">
@@ -81,14 +110,45 @@ Salalah"></textarea>
   wireSignOut();
 
   let profileId = null;
+  let partnershipColumnAvailable = false;
 
   function linesToArray(text) {
     return text.split('\n').map(s => s.trim()).filter(Boolean);
   }
 
+  function escapeHtml(value) {
+    return String(value ?? '').replace(/[&<>"']/g, m => ({
+      '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
+    }[m]));
+  }
+
+  async function detectPartnershipColumn() {
+    const result = await supabase.from('company_profile')
+      .select('operational_partnership_model')
+      .limit(1);
+
+    partnershipColumnAvailable = !result.error;
+    const field = document.getElementById('operational_partnership_model');
+    const note = document.getElementById('partnership-field-note');
+
+    if (!partnershipColumnAvailable) {
+      field.disabled = true;
+      note.innerHTML = 'Run the included <code>sql/add-operational-partnership-model.sql</code> once in Supabase to enable this field. The rest of Settings continues to work normally.';
+    } else {
+      field.disabled = false;
+      note.textContent = 'This is kept separate from Services so AI workers do not confuse a partnership structure with a service you sell.';
+    }
+  }
+
   async function loadProfile() {
+    await detectPartnershipColumn();
+
     const { data, error } = await supabase.from('company_profile').select('*').limit(1);
-    if (error || !data || data.length === 0) return;
+    if (error) {
+      document.getElementById('settings-error').textContent = error.message;
+      return;
+    }
+    if (!data || data.length === 0) return;
 
     const p = data[0];
     profileId = p.id;
@@ -98,6 +158,10 @@ Salalah"></textarea>
     document.getElementById('forbidden_claims').value = (p.forbidden_claims || []).join('\n');
     document.getElementById('signature').value = p.signature || '';
     document.getElementById('daily_max').value = (p.sending_limits && p.sending_limits.daily_max) ?? 20;
+
+    if (partnershipColumnAvailable) {
+      document.getElementById('operational_partnership_model').value = p.operational_partnership_model || '';
+    }
   }
 
   document.getElementById('settings-form').addEventListener('submit', async (e) => {
@@ -116,6 +180,11 @@ Salalah"></textarea>
       sending_limits: { daily_max: parseInt(document.getElementById('daily_max').value || '20', 10) }
     };
 
+    if (partnershipColumnAvailable) {
+      payload.operational_partnership_model =
+        document.getElementById('operational_partnership_model').value.trim();
+    }
+
     let error;
     if (profileId) {
       ({ error } = await supabase.from('company_profile').update(payload).eq('id', profileId));
@@ -126,15 +195,19 @@ Salalah"></textarea>
     }
 
     btn.disabled = false;
-    if (error) { errorBox.textContent = error.message; return; }
+    if (error) {
+      errorBox.textContent = error.message;
+      return;
+    }
 
-    await logActivity('Manual Entry', 'Updated company settings', 'company_profile', profileId, {});
+    await logActivity('Manual Entry', 'Updated company settings', 'company_profile', profileId, {
+      operational_partnership_model_saved: partnershipColumnAvailable
+    });
     btn.textContent = 'Saved ✓';
     setTimeout(() => { btn.textContent = 'Save settings'; }, 1800);
   });
 
-  loadProfile();
+  await loadProfile();
 </script>
-
 </body>
 </html>

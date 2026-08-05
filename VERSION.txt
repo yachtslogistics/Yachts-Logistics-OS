@@ -1,0 +1,19 @@
+Yacht Logistics OS site v6
+Built from the user's uploaded v5 base.
+
+Frontend changes:
+- contacts.html
+- partners.html
+- usage.html
+- dashboard worker/status upgrades
+- Settings operational partnership field
+- navigation updated everywhere
+- existing Drafts / Console / Activity live refresh preserved
+
+Backend deployment files:
+- workers/contact-finder-v4-current.js (exact backup of current working V4)
+- workers/outreach-writer-v1.js (new drafts-only worker; no sending)
+
+Database:
+- sql/api-usage-ledger.sql
+- sql/add-operational-partnership-model.sql
