@@ -1,3 +1,9 @@
+YACHT LOGISTICS OS v7.1
+
+This build adds dashboard alignment/status fixes, 12-hour Oman time, balanced market targeting (GCC / Iran / India-South Asia / international), and route-aware drafting while keeping verified-recipient safety.
+
+IMPORTANT: For the new AI routing/provider switch, read DEPLOY-NEXT.txt first.
+
 YACHT LOGISTICS OS — v6 DEPLOYMENT
 ==================================
 

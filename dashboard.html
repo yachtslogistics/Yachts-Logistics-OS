@@ -49,6 +49,15 @@
       <div class="stat-card"><div class="label">Follow-ups due</div><div class="value" id="stat-followups">—</div></div>
     </div>
 
+    <div class="ai-status-panel">
+      <div class="ai-status-main">
+        <span class="ai-status-title">AI routing</span>
+        <span id="ai-route-state" class="worker-state">Loading…</span>
+        <span id="ai-route-meta" class="ai-status-meta"></span>
+      </div>
+      <a href="settings.html" class="btn btn-secondary btn-sm">Change provider</a>
+    </div>
+
     <div class="panel">
       <div class="panel-header">
         <div>
@@ -80,7 +89,7 @@
   await requireAuth();
   wireSignOut();
 
-  const trackedWorkers = ['Prospect Finder', 'Relevance Scorer', 'Contact Finder'];
+  const trackedWorkers = ['Prospect Finder', 'Relevance Scorer', 'Contact Finder', 'Outreach Writer'];
 
   function escapeHtml(value) {
     return String(value ?? '').replace(/[&<>"']/g, m => ({
@@ -90,9 +99,24 @@
 
   function workerState(action) {
     const a = String(action || '').toLowerCase();
-    if (a.includes('failed') || a.includes('error')) return ['Issue', 'state-fail'];
     if (a.includes('skipped') || a.includes('aborted') || a.includes('budget')) return ['Protected / skipped', 'state-warn'];
+
+    const hardFailure =
+      a.includes('run failed') ||
+      a.includes('failed unexpectedly') ||
+      a.includes('scoring run failed') ||
+      a.includes('outreach writer failed') ||
+      a.includes('returned http 4') ||
+      a.includes('returned http 5') ||
+      a.includes('insert errors') && !/0 insert errors/.test(a);
+    if (hardFailure) return ['Issue', 'state-fail'];
+
+    const partialFailure = /failed(?: or unverified)?\s+([1-9]\d*)/.test(a) || /([1-9]\d*)\s+failure/.test(a);
+    if ((a.includes('complete') || a.includes('found') || a.includes('scored') || a.includes('inserted')) && partialFailure) {
+      return ['Working / partial', 'state-warn'];
+    }
     if (a.includes('complete') || a.includes('found') || a.includes('scored') || a.includes('inserted')) return ['Working', 'state-ok'];
+    if (a.includes('error')) return ['Issue', 'state-fail'];
     return ['Recorded', ''];
   }
 
@@ -108,14 +132,20 @@
   async function loadDashboard() {
     const today = new Date().toISOString().slice(0, 10);
 
-    const [prospects, contacts, partners, drafts, replies, followups, logsResult] = await Promise.all([
+    const omanNow = new Date(Date.now() + 4 * 60 * 60 * 1000);
+    const omanDayStart = new Date(Date.UTC(omanNow.getUTCFullYear(), omanNow.getUTCMonth(), omanNow.getUTCDate(), 0, 0, 0) - 4 * 60 * 60 * 1000).toISOString();
+    const omanMonthStart = new Date(Date.UTC(omanNow.getUTCFullYear(), omanNow.getUTCMonth(), 1, 0, 0, 0) - 4 * 60 * 60 * 1000).toISOString();
+
+    const [prospects, contacts, partners, drafts, replies, followups, logsResult, profileResult, usageResult] = await Promise.all([
       countTable('prospects'),
       countTable('contacts', q => q.eq('verified', true)),
       countTable('partners'),
       countTable('email_drafts', q => q.eq('status', 'draft')),
       countTable('replies', q => q.eq('handled', false)),
       countTable('follow_ups', q => q.eq('status', 'pending').lte('due_date', today)),
-      supabase.from('activity_log').select('*').order('created_at', { ascending: false }).limit(120)
+      supabase.from('activity_log').select('*').order('created_at', { ascending: false }).limit(120),
+      supabase.from('company_profile').select('sending_limits').limit(1),
+      supabase.from('api_usage').select('provider,created_at,estimated_cost_usd,billed_cost_usd,status').gte('created_at', omanMonthStart).order('created_at', { ascending: false }).limit(1000)
     ]);
 
     document.getElementById('stat-prospects').textContent = prospects;
@@ -124,6 +154,20 @@
     document.getElementById('stat-drafts').textContent = drafts;
     document.getElementById('stat-replies').textContent = replies;
     document.getElementById('stat-followups').textContent = followups;
+
+    const limits = profileResult.data?.[0]?.sending_limits || {};
+    const openaiOn = limits.ai_openai_enabled !== false;
+    const monthlyBudget = Math.min(4.5, Number(limits.openai_monthly_budget_usd ?? 4.5));
+    const geminiLimit = Math.min(24, Math.max(1, parseInt(limits.gemini_daily_request_limit ?? 20, 10)));
+    const usageRows = usageResult.data || [];
+    const openaiSpend = usageRows
+      .filter(r => r.provider === 'openai' && r.status === 'completed')
+      .reduce((sum, r) => sum + Number(r.billed_cost_usd ?? r.estimated_cost_usd ?? 0), 0);
+    const geminiToday = usageRows.filter(r => r.provider === 'gemini' && r.created_at >= omanDayStart && (r.status === 'completed' || r.status === 'failed')).length;
+    const routeState = document.getElementById('ai-route-state');
+    routeState.textContent = openaiOn ? 'OpenAI Luna preferred' : 'Gemini active';
+    routeState.className = 'worker-state ' + (openaiOn ? 'state-ok' : 'state-warn');
+    document.getElementById('ai-route-meta').textContent = `OpenAI $${openaiSpend.toFixed(3)} / $${monthlyBudget.toFixed(2)} · Gemini ${geminiToday}/${geminiLimit} today`;
 
     const logs = logsResult.data || [];
     const recentBox = document.getElementById('recent-activity');

@@ -75,6 +75,25 @@ Salalah"></textarea>
         </div>
 
         <div class="settings-section">
+          <div class="settings-section-title">Prospecting & route priorities</div>
+          <label for="target_markets">Priority markets (one per line)</label>
+          <textarea id="target_markets" placeholder="UAE
+Saudi Arabia
+Qatar
+Bahrain
+Kuwait
+Iran
+India
+Pakistan
+International"></textarea>
+          <div class="field-note">Prospect Finder still rotates regions so one country cannot dominate the database.</div>
+
+          <label for="outreach_route_notes">Approved route / market notes</label>
+          <textarea id="outreach_route_notes" class="tall-textarea" placeholder="Yachts Logistics provides shipping/logistics support from Shinas Port, Oman to Iran. Use this naturally for relevant Iranian, forwarding, trading and cargo prospects."></textarea>
+          <div class="field-note">These notes are available to the Relevance Scorer and Outreach Writer. They are not sent automatically and do not bypass your approved services.</div>
+        </div>
+
+        <div class="settings-section">
           <div class="settings-section-title">AI communication rules</div>
 
           <label for="approved_claims">Approved claims (things it is okay to say about the company)</label>
@@ -85,6 +104,34 @@ Salalah"></textarea>
 
           <label for="signature">Email signature</label>
           <textarea id="signature" class="tall-textarea"></textarea>
+        </div>
+
+        <div class="settings-section">
+          <div class="settings-section-title">AI provider control</div>
+          <div class="ai-switch-row">
+            <div>
+              <label for="ai_openai_enabled" class="switch-label">Use OpenAI Luna</label>
+              <div class="field-note">ON = prefer OpenAI Luna. OFF = Gemini takes over automatically. The Router also falls back to Gemini if OpenAI is paced, out of credit, or unavailable.</div>
+            </div>
+            <label class="toggle-switch" aria-label="Use OpenAI Luna">
+              <input type="checkbox" id="ai_openai_enabled" checked>
+              <span class="toggle-slider"></span>
+            </label>
+          </div>
+          <div class="ai-mode-line" id="ai-mode-line">OpenAI Luna preferred</div>
+
+          <div class="form-grid form-grid-2 ai-budget-grid">
+            <div>
+              <label for="openai_monthly_budget_usd">OpenAI monthly safety budget (USD)</label>
+              <input type="number" id="openai_monthly_budget_usd" min="0.10" max="4.50" step="0.10" value="4.50">
+              <div class="field-note">Hard maximum in Router v2 is $4.50, leaving a buffer from your $5 credit. It also paces spend across the remaining days of the month.</div>
+            </div>
+            <div>
+              <label for="gemini_daily_request_limit">Gemini worker requests/day</label>
+              <input type="number" id="gemini_daily_request_limit" min="1" max="24" step="1" value="20">
+              <div class="field-note">Default 20, with a hard maximum of 24. Batching lets one request score/write several companies.</div>
+            </div>
+          </div>
         </div>
 
         <div class="settings-section">
@@ -111,6 +158,9 @@ Salalah"></textarea>
 
   let profileId = null;
   let partnershipColumnAvailable = false;
+  let currentSendingLimits = {};
+  const DEFAULT_TARGET_MARKETS = ['UAE','Saudi Arabia','Qatar','Bahrain','Kuwait','Iran','India','Pakistan','International'];
+  const DEFAULT_ROUTE_NOTES = 'Yachts Logistics provides shipping/logistics support from Shinas Port, Oman to Iran. Use this naturally for relevant Iranian, forwarding, trading and cargo prospects.';
 
   function linesToArray(text) {
     return text.split('\n').map(s => s.trim()).filter(Boolean);
@@ -157,12 +207,30 @@ Salalah"></textarea>
     document.getElementById('approved_claims').value = (p.approved_claims || []).join('\n');
     document.getElementById('forbidden_claims').value = (p.forbidden_claims || []).join('\n');
     document.getElementById('signature').value = p.signature || '';
-    document.getElementById('daily_max').value = (p.sending_limits && p.sending_limits.daily_max) ?? 20;
+    currentSendingLimits = (p.sending_limits && typeof p.sending_limits === 'object') ? p.sending_limits : {};
+    document.getElementById('daily_max').value = currentSendingLimits.daily_max ?? 20;
+    document.getElementById('ai_openai_enabled').checked = currentSendingLimits.ai_openai_enabled !== false;
+    document.getElementById('openai_monthly_budget_usd').value = Math.min(4.5, Number(currentSendingLimits.openai_monthly_budget_usd ?? 4.5));
+    document.getElementById('gemini_daily_request_limit').value = Math.min(24, Math.max(1, parseInt(currentSendingLimits.gemini_daily_request_limit ?? 20, 10)));
+    document.getElementById('target_markets').value = Array.isArray(currentSendingLimits.target_markets)
+      ? currentSendingLimits.target_markets.join('\n')
+      : DEFAULT_TARGET_MARKETS.join('\n');
+    document.getElementById('outreach_route_notes').value = currentSendingLimits.outreach_route_notes || DEFAULT_ROUTE_NOTES;
+    updateAiModeLine();
 
     if (partnershipColumnAvailable) {
       document.getElementById('operational_partnership_model').value = p.operational_partnership_model || '';
     }
   }
+
+  function updateAiModeLine() {
+    const on = document.getElementById('ai_openai_enabled').checked;
+    const line = document.getElementById('ai-mode-line');
+    line.textContent = on ? 'OpenAI Luna preferred · Gemini automatic fallback' : 'OpenAI paused · Gemini active';
+    line.className = 'ai-mode-line ' + (on ? 'state-ok' : 'state-warn');
+  }
+
+  document.getElementById('ai_openai_enabled').addEventListener('change', updateAiModeLine);
 
   document.getElementById('settings-form').addEventListener('submit', async (e) => {
     e.preventDefault();
@@ -177,7 +245,15 @@ Salalah"></textarea>
       approved_claims: linesToArray(document.getElementById('approved_claims').value),
       forbidden_claims: linesToArray(document.getElementById('forbidden_claims').value),
       signature: document.getElementById('signature').value.trim(),
-      sending_limits: { daily_max: parseInt(document.getElementById('daily_max').value || '20', 10) }
+      sending_limits: {
+        ...currentSendingLimits,
+        daily_max: parseInt(document.getElementById('daily_max').value || '20', 10),
+        ai_openai_enabled: document.getElementById('ai_openai_enabled').checked,
+        openai_monthly_budget_usd: Math.min(4.5, Math.max(0.1, parseFloat(document.getElementById('openai_monthly_budget_usd').value || '4.5'))),
+        gemini_daily_request_limit: Math.min(24, Math.max(1, parseInt(document.getElementById('gemini_daily_request_limit').value || '20', 10))),
+        target_markets: linesToArray(document.getElementById('target_markets').value),
+        outreach_route_notes: document.getElementById('outreach_route_notes').value.trim()
+      }
     };
 
     if (partnershipColumnAvailable) {
@@ -200,8 +276,12 @@ Salalah"></textarea>
       return;
     }
 
+    currentSendingLimits = payload.sending_limits;
     await logActivity('Manual Entry', 'Updated company settings', 'company_profile', profileId, {
-      operational_partnership_model_saved: partnershipColumnAvailable
+      operational_partnership_model_saved: partnershipColumnAvailable,
+      ai_openai_enabled: payload.sending_limits.ai_openai_enabled,
+      openai_monthly_budget_usd: payload.sending_limits.openai_monthly_budget_usd,
+      gemini_daily_request_limit: payload.sending_limits.gemini_daily_request_limit
     });
     btn.textContent = 'Saved ✓';
     setTimeout(() => { btn.textContent = 'Save settings'; }, 1800);

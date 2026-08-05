@@ -1,0 +1,35 @@
+YACHT LOGISTICS OS v7.1 — NEXT DEPLOYMENT
+
+1) Upload/replace the WEBSITE files in GitHub.
+   - Dashboard KPI numbers are aligned.
+   - Worker status no longer marks successful "failed 0" runs as red issues.
+   - All displayed Oman times use 12-hour AM/PM format.
+   - Settings now includes Priority Markets + Shinas→Iran route notes.
+
+2) AI ROUTER
+   Replace the Cloudflare AI Router code with workers/ai-router-v2.js
+   Keep NO Cron Trigger on the Router.
+
+3) RELEVANCE SCORER
+   Replace with workers/relevance-scorer-v3-router.js (v3.1 inside).
+   Keep the existing Cron.
+
+4) OUTREACH WRITER
+   Create/deploy workers/outreach-writer-v2-router.js (v2.1 inside).
+   DO NOT add a Cron yet.
+   First run one dry test, then one live test.
+
+5) PROSPECT FINDER TARGETING
+   Optional but recommended after the draft test: replace Prospect Finder with
+   workers/prospect-finder-v6-market-rotation.js. It keeps the same safety checks
+   but rotates GCC / Iran-Shinas corridor / India-South Asia / international.
+
+6) AFTER WRITER LIVE TEST PASSES
+   Add Outreach Writer Cron: 45 */6 * * *
+   This is 4 scheduled Writer requests/day max, leaving Gemini headroom.
+
+IMPORTANT
+- Nothing sends email automatically. Writer only creates drafts for review.
+- Verified recipient emails still come only from the Contacts table.
+- Gemini hard cap remains 24 routed requests/day; default setting remains 20.
+- OpenAI remains paced under the monthly safety budget.
