@@ -962,3 +962,44 @@ tr:last-child td { border-bottom: none; }
   .form-grid-2 { grid-template-columns: 1fr; }
   .ai-switch-row, .ai-status-panel { align-items: flex-start; }
 }
+
+/* v7.2 conversations */
+.conversation-help { border-style: dashed; }
+.conversation-card { margin-bottom: 14px; }
+.conversation-title-row { align-items: flex-start; }
+.conversation-summary {
+  padding: 12px 14px;
+  border: 1px solid var(--panel-border);
+  border-radius: 10px;
+  background: rgba(255,255,255,0.02);
+  margin-bottom: 12px;
+  font-size: 12px;
+}
+.conversation-summary details { margin-top: 8px; }
+.conversation-summary summary { cursor: pointer; color: var(--text-muted); }
+.conversation-sent-copy { margin-top: 10px; line-height: 1.55; color: var(--text-muted); }
+.conversation-thread { display: grid; gap: 10px; margin-bottom: 12px; }
+.conversation-message {
+  border: 1px solid var(--panel-border);
+  border-radius: 12px;
+  padding: 12px;
+}
+.conversation-message.inbound { border-left: 3px solid #4e7fc8; }
+.conversation-message.outbound { border-left: 3px solid #1fbea6; }
+.conversation-message-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+  font-size: 12px;
+}
+.conversation-message-head span { color: var(--text-faint); font-size: 11px; }
+.conversation-message textarea { min-height: 120px; }
+.reply-paste-box {
+  border-top: 1px solid var(--panel-border);
+  margin-top: 12px;
+  padding-top: 14px;
+}
+.reply-paste-box h3 { margin: 0 0 12px; font-size: 14px; }
+.reply-paste-box textarea { min-height: 120px; }
+.conversation-next { color: var(--text-faint); font-size: 11px; margin-top: 10px; }

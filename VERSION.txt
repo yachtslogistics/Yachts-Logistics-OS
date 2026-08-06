@@ -1,1 +1,1 @@
-Yacht Logistics OS v7.1 — AI routing + dashboard polish + 12-hour Oman time + market targeting
+Yacht Logistics OS v7.2 — batched contacts + Outreach Writer v3 + manual conversation/reply/follow-up workflow

@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Conversations — Yacht Logistics OS</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>⚓</text></svg>">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div class="app-shell">
+  <aside class="sidebar">
+    <div class="sidebar-brand">
+      <div class="mark">⚓</div>
+      <div><div class="name">Yacht Logistics</div><div class="sub">Operating System</div></div>
+    </div>
+    <ul class="nav-list">
+      <li><a href="dashboard.html">Dashboard</a></li>
+      <li><a href="prospects.html">Prospects</a></li>
+      <li><a href="contacts.html">Contacts</a></li>
+      <li><a href="partners.html">Partners</a></li>
+      <li><a href="pipeline.html">Pipeline</a></li>
+      <li><a href="drafts.html">Drafts</a></li>
+      <li><a href="conversations.html" class="active">Conversations</a></li>
+      <li><a href="console.html">Console</a></li>
+      <li><a href="usage.html">Usage</a></li>
+      <li><a href="settings.html">Settings</a></li>
+      <li><a href="activity.html">Activity Log</a></li>
+    </ul>
+    <div class="sidebar-footer">
+      <div class="user-email" data-user-email>—</div>
+      <button class="btn-signout" data-signout>Sign out</button>
+    </div>
+  </aside>
+
+  <main class="main">
+    <div class="page-header">
+      <h1>Conversations</h1>
+      <p>Paste real replies here. AI prepares the next response for your review — nothing sends automatically.</p>
+    </div>
+
+    <div class="panel conversation-help">
+      <div class="panel-header"><h2>How this works</h2></div>
+      <div class="panel-subtext">After you approve an outreach draft and send it manually, click <strong>Mark as sent</strong> on Drafts. That company appears here. Paste their reply whenever one arrives. The Conversation Manager will create a suggested reply on its next run.</div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-header"><h2>Active conversations</h2><span id="active-count" class="badge">—</span></div>
+      <div id="active-list"><div class="log-row">Loading…</div></div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-header"><h2>Closed</h2><span id="closed-count" class="badge">—</span></div>
+      <div id="closed-list"><div class="log-row">Loading…</div></div>
+    </div>
+  </main>
+</div>
+
+<script type="module">
+  import { supabase, requireAuth, wireSignOut, timeAgo, logActivity } from './js/supabaseClient.js';
+
+  await requireAuth();
+  wireSignOut();
+
+  const FOLLOW_UP_DELAYS_DAYS = [7, 14, 14];
+
+  function esc(v) {
+    return String(v ?? '').replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+  }
+  function isoPlusDays(days) { return new Date(Date.now() + days * 86400000).toISOString(); }
+  function displayStatus(status) { return String(status || '').replaceAll('_',' ').replace(/\b\w/g, c => c.toUpperCase()); }
+
+  function messageHtml(m) {
+    const inbound = m.direction === 'inbound';
+    const cls = inbound ? 'conversation-message inbound' : 'conversation-message outbound';
+    const title = inbound ? 'Their reply' : (m.message_type === 'ai_follow_up_draft' ? 'Follow-up draft' : m.message_type === 'ai_reply_draft' ? 'Suggested reply' : 'Your message');
+    const editable = !inbound && (m.status === 'draft' || m.status === 'approved') && (m.message_type === 'ai_reply_draft' || m.message_type === 'ai_follow_up_draft');
+    return `
+      <div class="${cls}" data-message-id="${esc(m.id)}" data-message-type="${esc(m.message_type)}">
+        <div class="conversation-message-head">
+          <strong>${esc(title)}</strong>
+          <span>${esc(timeAgo(m.sent_at || m.created_at))}</span>
+        </div>
+        <label>Subject</label>
+        <input data-msg-field="subject" value="${esc(m.subject || '')}" ${editable ? '' : 'disabled'}>
+        <label>Message</label>
+        <textarea data-msg-field="body" ${editable ? '' : 'disabled'}>${esc(m.body || '')}</textarea>
+        ${editable ? `
+          <div class="form-actions">
+            <button class="btn btn-primary btn-sm" data-msg-action="save">Save edits</button>
+            ${m.status !== 'approved' ? '<button class="btn btn-secondary btn-sm" data-msg-action="approve">Approve</button>' : ''}
+            <button class="btn btn-secondary btn-sm" data-msg-action="sent">Mark as sent</button>
+          </div>
+        ` : ''}
+      </div>`;
+  }
+
+  function conversationCard(c, messages) {
+    const company = c.prospects?.company_name || 'Unknown company';
+    const initial = messages.find(m => m.message_type === 'initial_sent');
+    const visible = messages.filter(m => m.message_type !== 'initial_sent');
+    const active = c.status === 'active';
+    const due = c.next_follow_up_at ? timeAgo(c.next_follow_up_at) : 'Not scheduled';
+    return `
+      <div class="panel conversation-card" data-conversation-id="${esc(c.id)}" data-prospect-id="${esc(c.prospect_id)}">
+        <div class="panel-header conversation-title-row">
+          <div>
+            <h2 style="font-size:15px;">${esc(company)}</h2>
+            <div class="panel-subtext">Started ${esc(timeAgo(c.started_at))} · Follow-ups sent: ${Number(c.follow_up_count || 0)}</div>
+          </div>
+          <span class="badge ${active ? 'badge-approved' : ''}">${esc(displayStatus(c.status))}</span>
+        </div>
+
+        ${initial ? `
+          <div class="conversation-summary">
+            <strong>Sent subject:</strong> ${esc(initial.subject || '—')}
+            <details>
+              <summary>View the email you sent</summary>
+              <div class="conversation-sent-copy">${esc(initial.body || '').replace(/\n/g,'<br>')}</div>
+            </details>
+          </div>
+        ` : ''}
+
+        ${visible.length ? `<div class="conversation-thread">${visible.map(messageHtml).join('')}</div>` : '<div class="log-row">No replies yet.</div>'}
+
+        ${active ? `
+          <div class="reply-paste-box">
+            <h3>Paste a new reply</h3>
+            <label>Their subject</label>
+            <input data-reply-subject placeholder="Re: ${esc(initial?.subject || '')}">
+            <label>Their reply</label>
+            <textarea data-reply-body placeholder="Paste the message they sent you here..."></textarea>
+            <div class="form-actions">
+              <button class="btn btn-primary btn-sm" data-action="save-reply">Save reply for AI</button>
+              <button class="btn-danger-text" data-action="close">Close conversation</button>
+            </div>
+            <div class="field-note">The reply stays pending until Conversation Manager runs. Empty scheduled checks use no AI request.</div>
+          </div>
+          <div class="conversation-next">Next follow-up: ${esc(due)}</div>
+        ` : ''}
+      </div>`;
+  }
+
+  async function load() {
+    const { data: convs, error } = await supabase
+      .from('outreach_conversations')
+      .select('*, prospects(company_name,country,business_type)')
+      .order('last_activity_at', { ascending: false });
+
+    if (error) {
+      document.getElementById('active-list').innerHTML = `<div class="log-row">Conversations are not ready yet: ${esc(error.message)}. Run sql/outreach-conversations.sql once in Supabase.</div>`;
+      document.getElementById('closed-list').innerHTML = '';
+      return;
+    }
+
+    const ids = (convs || []).map(c => c.id);
+    let messages = [];
+    if (ids.length) {
+      const r = await supabase.from('outreach_messages').select('*').in('conversation_id', ids).order('created_at', { ascending: true });
+      if (!r.error) messages = r.data || [];
+    }
+    const byConv = new Map();
+    for (const m of messages) {
+      if (!byConv.has(m.conversation_id)) byConv.set(m.conversation_id, []);
+      byConv.get(m.conversation_id).push(m);
+    }
+
+    const active = (convs || []).filter(c => c.status === 'active');
+    const closed = (convs || []).filter(c => c.status !== 'active');
+    document.getElementById('active-count').textContent = active.length;
+    document.getElementById('closed-count').textContent = closed.length;
+    document.getElementById('active-list').innerHTML = active.length ? active.map(c => conversationCard(c, byConv.get(c.id) || [])).join('') : '<div class="log-row">No active conversations yet. Mark an approved draft as sent to start one.</div>';
+    document.getElementById('closed-list').innerHTML = closed.length ? closed.map(c => conversationCard(c, byConv.get(c.id) || [])).join('') : '<div class="log-row">No closed conversations.</div>';
+    wireActions();
+  }
+
+  function wireActions() {
+    document.querySelectorAll('[data-conversation-id]').forEach(card => {
+      const conversationId = card.dataset.conversationId;
+      const prospectId = card.dataset.prospectId;
+      const saveReply = card.querySelector('[data-action="save-reply"]');
+      const closeBtn = card.querySelector('[data-action="close"]');
+
+      if (saveReply) saveReply.addEventListener('click', async () => {
+        const subject = card.querySelector('[data-reply-subject]').value.trim();
+        const body = card.querySelector('[data-reply-body]').value.trim();
+        if (!body) return alert('Paste their reply first.');
+        saveReply.disabled = true;
+        const now = new Date().toISOString();
+        const { error } = await supabase.from('outreach_messages').insert({
+          conversation_id: conversationId,
+          prospect_id: prospectId,
+          direction: 'inbound',
+          message_type: 'reply_received',
+          subject: subject || null,
+          body,
+          status: 'saved',
+          ai_status: 'pending'
+        });
+        if (error) { saveReply.disabled = false; return alert(error.message); }
+        await supabase.from('outreach_conversations').update({
+          last_activity_at: now,
+          last_inbound_at: now,
+          next_follow_up_at: null,
+          follow_up_count: 0
+        }).eq('id', conversationId);
+        await logActivity('Manual Conversation', 'Reply pasted — waiting for AI suggested response.', 'outreach_messages', conversationId, { prospect_id: prospectId });
+        await load();
+      });
+
+      if (closeBtn) closeBtn.addEventListener('click', async () => {
+        if (!confirm('Close this conversation?')) return;
+        const now = new Date().toISOString();
+        const { error } = await supabase.from('outreach_conversations').update({ status:'closed', closed_at:now, close_reason:'manual', last_activity_at:now }).eq('id', conversationId);
+        if (error) return alert(error.message);
+        await logActivity('Manual Conversation', 'Conversation closed manually.', 'outreach_conversations', conversationId, { prospect_id: prospectId });
+        await load();
+      });
+
+      card.querySelectorAll('[data-message-id]').forEach(msg => {
+        const id = msg.dataset.messageId;
+        const type = msg.dataset.messageType;
+        const save = msg.querySelector('[data-msg-action="save"]');
+        const approve = msg.querySelector('[data-msg-action="approve"]');
+        const sent = msg.querySelector('[data-msg-action="sent"]');
+        const values = () => ({ subject: msg.querySelector('[data-msg-field="subject"]')?.value.trim() || null, body: msg.querySelector('[data-msg-field="body"]')?.value.trim() || '' });
+
+        if (save) save.addEventListener('click', async () => {
+          const v = values(); if (!v.body) return alert('Message body cannot be empty.');
+          const { error } = await supabase.from('outreach_messages').update(v).eq('id', id);
+          if (error) return alert(error.message); await load();
+        });
+        if (approve) approve.addEventListener('click', async () => {
+          const v = values(); if (!v.body) return alert('Message body cannot be empty.');
+          const { error } = await supabase.from('outreach_messages').update({ ...v, status:'approved' }).eq('id', id);
+          if (error) return alert(error.message); await load();
+        });
+        if (sent) sent.addEventListener('click', async () => {
+          const v = values(); if (!v.body) return alert('Message body cannot be empty.');
+          const now = new Date().toISOString();
+          const { error } = await supabase.from('outreach_messages').update({ ...v, status:'sent', sent_at:now }).eq('id', id);
+          if (error) return alert(error.message);
+
+          const convRow = await supabase.from('outreach_conversations').select('follow_up_count').eq('id', conversationId).single();
+          let count = Number(convRow.data?.follow_up_count || 0);
+          if (type === 'ai_follow_up_draft') count += 1;
+          const delay = FOLLOW_UP_DELAYS_DAYS[Math.min(count, FOLLOW_UP_DELAYS_DAYS.length - 1)];
+          const next = count >= 3 ? null : isoPlusDays(delay);
+          await supabase.from('outreach_conversations').update({
+            last_activity_at: now,
+            last_outbound_at: now,
+            follow_up_count: count,
+            next_follow_up_at: next
+          }).eq('id', conversationId);
+          await supabase.from('prospects').update({ status:'contacted', updated_at:now }).eq('id', prospectId);
+          await logActivity('Manual Conversation', 'Approved response marked as sent.', 'outreach_messages', id, { prospect_id: prospectId, message_type:type });
+          await load();
+        });
+      });
+    });
+  }
+
+  await load();
+  setInterval(load, 30000);
+</script>
+</body>
+</html>

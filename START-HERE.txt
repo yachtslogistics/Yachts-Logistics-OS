@@ -1,129 +1,54 @@
-YACHT LOGISTICS OS v7.1
+YACHT LOGISTICS OS v7.2 — CONTACT SPEED + BETTER EMAILS + CONVERSATIONS
 
-This build adds dashboard alignment/status fixes, 12-hour Oman time, balanced market targeting (GCC / Iran / India-South Asia / international), and route-aware drafting while keeping verified-recipient safety.
+This build continues directly from v7.1.
+Nothing sends email automatically.
 
-IMPORTANT: For the new AI routing/provider switch, read DEPLOY-NEXT.txt first.
+WHAT CHANGED
+- Outreach Writer v3: warmer human introductions, stronger cooperation language,
+  varied openings by prospect type, website invitation, English-only Iran drafts
+  for token efficiency, no Asyad/company block.
+- Contact Finder v5: researches up to 5 prospects in ONE Groq request while
+  keeping v4's working host-based evidence check and broad-contact policy.
+- New Conversations page: after you manually send an approved email, mark it
+  sent, then paste future replies under that exact company.
+- New Conversation Manager Worker: reads the real conversation history and
+  creates suggested replies/follow-ups for human review. Never sends.
+- Follow-up plan: first follow-up after 7 days, then 14 days, then 14 days;
+  maximum 3 follow-ups. If the company never replies at all, conversation closes
+  automatically at 6 weeks. Any company that has replied is NOT auto-closed.
+- Dashboard reply/follow-up cards now use the new conversation workspace.
 
-YACHT LOGISTICS OS — v6 DEPLOYMENT
-==================================
+DO THESE IN ORDER
+1) Upload/replace the website files in GitHub.
+2) Supabase SQL Editor: run sql/outreach-conversations.sql ONCE.
+3) Outreach Writer: replace code with workers/outreach-writer-v3-router.js.
+   Keep its existing variables, compatibility flag and Cron.
+4) Contact Finder: replace code with workers/contact-finder-v5-batched.js.
+   Keep its existing variables and Cron. Test dry-run before relying on Cron.
+5) Create a new Cloudflare Worker named conversation-manager.
+   Paste workers/conversation-manager-v1-router.js.
+   Add the same variables used by Outreach Writer:
+     AI_ROUTER_URL, ROUTER_SECRET, SUPABASE_URL, SUPABASE_SERVICE_KEY, WORKER_SECRET
+   Add compatibility flag: global_fetch_strictly_public
+   Do NOT add its Cron until we test it with one pasted reply.
 
-This ZIP is built directly on your uploaded v5. It does not replace your working
-Prospect Finder, Relevance Scorer, Contact Finder V4, or AI Router.
+HOW CONVERSATIONS WORK
+- Drafts -> edit -> Approve.
+- You manually send that approved email outside the OS.
+- Back in Drafts, click Mark as sent.
+- The company appears in Conversations. Only the actual sent email is kept as
+  the starting message; the OS does not put old draft/edit versions in your face.
+- When they reply: paste subject + reply -> Save reply for AI.
+- Conversation Manager reads the sent email + thread and creates a suggested reply.
+- You edit/approve it and manually send it, then click Mark as sent.
+- Close Conversation is always available manually.
 
-WHAT v6 ADDS
-------------
-- Contacts page (reads the real contacts table)
-- Partners page (reads the real partners table)
-- API Usage page (reads api_usage)
-- Dashboard counts for prospects, verified contacts, partners, drafts, replies,
-  and follow-ups
-- Live worker-status cards from activity_log
-- Updated navigation on every page
-- Settings section for the Operational Partnership Model
-- Outreach Writer v1 Worker source (drafts only; NEVER sends)
-- Backup copy of your current Contact Finder V4
-- SQL files needed by the new Settings/Usage screens
+AI COST CONTROL
+- Conversation Manager makes ZERO AI calls when there is no pasted reply or due follow-up.
+- It batches up to 5 reply/follow-up jobs into one routed AI request.
+- It uses the existing OpenAI/Gemini Router switch. No Router code change is required.
+- Iran first-contact drafts stay English-only by default to avoid spending extra output tokens.
 
-STEP 1 — DATABASE (ONE TIME)
------------------------------
-In Supabase > SQL Editor, run:
-
-1) sql/api-usage-ledger.sql
-   - If you already ran the usage-ledger setup, running it again is safe.
-
-2) sql/add-operational-partnership-model.sql
-   - Adds the dedicated Operational Partnership Model field used in Settings.
-
-STEP 2 — WEBSITE
-----------------
-Upload the WEBSITE files/folders from this ZIP to the same GitHub repo that
-currently hosts your v5 site.
-
-Overwrite the old files when GitHub asks.
-
-Important:
-- Keep js/supabaseClient.js exactly as included.
-- Do NOT upload any Cloudflare API secret into the website.
-- Cloudflare Pages should redeploy automatically from GitHub.
-
-After deploy, log in and check:
-Dashboard -> Contacts -> Partners -> Drafts -> Console -> Usage -> Settings
-
-STEP 3 — OUTREACH WRITER (NEW WORKER)
---------------------------------------
-The file is:
-workers/outreach-writer-v1.js
-
-It creates personalized email drafts only. It never sends email.
-
-Create a new Cloudflare Worker named:
-outreach-writer
-
-Paste the entire contents of workers/outreach-writer-v1.js.
-
-Add these Variables / Secrets:
-- GEMINI_API_KEY          Secret
-- SUPABASE_URL            Plain text
-- SUPABASE_SERVICE_KEY    Secret
-- WORKER_SECRET           Secret
-
-Use the same real values you already use in the Relevance Scorer.
-Do NOT type secrets into browser scripts.
-
-FIRST TEST — DRY RUN
---------------------
-Open your browser console (F12 -> Console) and paste:
-
-const workerUrl = prompt("Paste Outreach Writer Worker URL");
-const secret = prompt("Enter Outreach Writer WORKER_SECRET");
-
-fetch(workerUrl + "?batch=1", {
-  headers: { "x-worker-secret": secret }
-})
-.then(async r => {
-  console.log("HTTP STATUS:", r.status);
-  console.log(await r.text());
-})
-.catch(console.error);
-
-A successful dry run should say:
-DRY RUN — no drafts were written.
-
-SECOND TEST — LIVE
-------------------
-Only after the dry run looks correct:
-
-const workerUrl = prompt("Paste Outreach Writer Worker URL");
-const secret = prompt("Enter Outreach Writer WORKER_SECRET");
-
-fetch(workerUrl + "?batch=1&live=true", {
-  headers: { "x-worker-secret": secret }
-})
-.then(async r => {
-  console.log("HTTP STATUS:", r.status);
-  console.log(await r.text());
-})
-.catch(console.error);
-
-Then open Drafts in the website. The new draft should appear there for review.
-
-CRON — ONLY AFTER BOTH TESTS PASS
----------------------------------
-Cloudflare Worker -> Settings -> Triggers -> Cron Trigger
-
-Use:
-45 */6 * * *
-
-The Worker checks up to 5 ready prospects per scheduled run, uses one Gemini
-request for the batch, and self-caps to 2 real Outreach Writer Gemini calls per
-Oman calendar day.
-
-IMPORTANT SAFETY
-----------------
-- Writer NEVER sends email.
-- Every draft stays status="draft" until you review it.
-- Contact Finder V4 remains unchanged and is backed up in:
-  workers/contact-finder-v4-current.js
-- AI Router is not changed by this ZIP.
-- The Writer uses the existing Gemini-style workflow instead of guessing a
-  missing Router v2 endpoint contract.
+Suggested Conversation Manager Cron AFTER testing:
+15 */6 * * *
+The schedule checks four times/day, but empty checks use zero OpenAI/Gemini requests.

@@ -1,35 +1,33 @@
-YACHT LOGISTICS OS v7.1 — NEXT DEPLOYMENT
+YACHT LOGISTICS OS v7.2 — NEXT STEPS
 
-1) Upload/replace the WEBSITE files in GitHub.
-   - Dashboard KPI numbers are aligned.
-   - Worker status no longer marks successful "failed 0" runs as red issues.
-   - All displayed Oman times use 12-hour AM/PM format.
-   - Settings now includes Priority Markets + Shinas→Iran route notes.
+A) WEBSITE
+Upload v7.2 files to GitHub.
 
-2) AI ROUTER
-   Replace the Cloudflare AI Router code with workers/ai-router-v2.js
-   Keep NO Cron Trigger on the Router.
+B) DATABASE — ONCE
+Run: sql/outreach-conversations.sql
 
-3) RELEVANCE SCORER
-   Replace with workers/relevance-scorer-v3-router.js (v3.1 inside).
-   Keep the existing Cron.
+C) OUTREACH WRITER
+Replace current Worker code with: workers/outreach-writer-v3-router.js
+Keep its existing Cron and variables.
 
-4) OUTREACH WRITER
-   Create/deploy workers/outreach-writer-v2-router.js (v2.1 inside).
-   DO NOT add a Cron yet.
-   First run one dry test, then one live test.
+D) CONTACT FINDER
+Replace current Worker code with: workers/contact-finder-v5-batched.js
+Keep existing Cron. First test ?batch=5 as a dry run.
 
-5) PROSPECT FINDER TARGETING
-   Optional but recommended after the draft test: replace Prospect Finder with
-   workers/prospect-finder-v6-market-rotation.js. It keeps the same safety checks
-   but rotates GCC / Iran-Shinas corridor / India-South Asia / international.
+E) CONVERSATION MANAGER
+Create Worker: conversation-manager
+Code: workers/conversation-manager-v1-router.js
+Variables: AI_ROUTER_URL, ROUTER_SECRET, SUPABASE_URL, SUPABASE_SERVICE_KEY, WORKER_SECRET
+Compatibility flag: global_fetch_strictly_public
+No Cron until one dry/live test succeeds.
 
-6) AFTER WRITER LIVE TEST PASSES
-   Add Outreach Writer Cron: 45 */6 * * *
-   This is 4 scheduled Writer requests/day max, leaving Gemini headroom.
+F) FIRST REAL CONVERSATION TEST
+1. Edit + Approve one existing outreach draft.
+2. Manually send it yourself.
+3. Click Mark as sent in Drafts.
+4. Open Conversations and paste a sample/real reply from that company.
+5. Run Conversation Manager dry test.
+6. If good, live test and confirm suggested reply appears.
+7. Then add Cron: 15 */6 * * *
 
-IMPORTANT
-- Nothing sends email automatically. Writer only creates drafts for review.
-- Verified recipient emails still come only from the Contacts table.
-- Gemini hard cap remains 24 routed requests/day; default setting remains 20.
-- OpenAI remains paced under the monthly safety budget.
+Nothing in v7.2 sends email automatically.

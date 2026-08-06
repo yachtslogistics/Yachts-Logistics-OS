@@ -23,6 +23,7 @@
       <li><a href="partners.html">Partners</a></li>
       <li><a href="pipeline.html">Pipeline</a></li>
       <li><a href="drafts.html">Drafts</a></li>
+      <li><a href="conversations.html">Conversations</a></li>
       <li><a href="console.html">Console</a></li>
       <li><a href="usage.html">Usage</a></li>
       <li><a href="settings.html">Settings</a></li>
@@ -45,7 +46,7 @@
       <div class="stat-card"><div class="label">Verified contacts</div><div class="value" id="stat-contacts">—</div></div>
       <div class="stat-card"><div class="label">Partners</div><div class="value" id="stat-partners">—</div></div>
       <div class="stat-card"><div class="label">Drafts to review</div><div class="value" id="stat-drafts">—</div></div>
-      <div class="stat-card"><div class="label">Unhandled replies</div><div class="value" id="stat-replies">—</div></div>
+      <div class="stat-card"><div class="label">Reply drafts to review</div><div class="value" id="stat-replies">—</div></div>
       <div class="stat-card"><div class="label">Follow-ups due</div><div class="value" id="stat-followups">—</div></div>
     </div>
 
@@ -89,7 +90,7 @@
   await requireAuth();
   wireSignOut();
 
-  const trackedWorkers = ['Prospect Finder', 'Relevance Scorer', 'Contact Finder', 'Outreach Writer'];
+  const trackedWorkers = ['Prospect Finder', 'Relevance Scorer', 'Contact Finder', 'Outreach Writer', 'Conversation Manager'];
 
   function escapeHtml(value) {
     return String(value ?? '').replace(/[&<>"']/g, m => ({
@@ -141,8 +142,8 @@
       countTable('contacts', q => q.eq('verified', true)),
       countTable('partners'),
       countTable('email_drafts', q => q.eq('status', 'draft')),
-      countTable('replies', q => q.eq('handled', false)),
-      countTable('follow_ups', q => q.eq('status', 'pending').lte('due_date', today)),
+      countTable('outreach_messages', q => q.eq('message_type', 'ai_reply_draft').eq('status', 'draft')),
+      countTable('outreach_conversations', q => q.eq('status', 'active').lte('next_follow_up_at', new Date().toISOString())),
       supabase.from('activity_log').select('*').order('created_at', { ascending: false }).limit(120),
       supabase.from('company_profile').select('sending_limits').limit(1),
       supabase.from('api_usage').select('provider,created_at,estimated_cost_usd,billed_cost_usd,status').gte('created_at', omanMonthStart).order('created_at', { ascending: false }).limit(1000)

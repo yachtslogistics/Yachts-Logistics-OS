@@ -79,7 +79,7 @@
   function draftCard(d, editable) {
     const companyName = d.prospects?.company_name || 'Unknown company';
     return `
-      <div class="panel" style="margin-bottom: 12px;" data-draft-id="${d.id}">
+      <div class="panel" style="margin-bottom: 12px;" data-draft-id="${d.id}" data-prospect-id="${d.prospect_id || ''}">
         <div class="panel-header">
           <h2 style="font-size: 14px;">${escapeHtml(companyName)} <span style="color: var(--text-faint); font-weight: 400;">· ${escapeHtml(d.template_type || 'general')}</span></h2>
           <span class="badge badge-${d.status === 'approved' ? 'approved' : d.status === 'rejected' ? 'lost' : 'draft_ready'}">${escapeHtml(d.status || 'draft')}</span>
@@ -95,7 +95,12 @@
             <button class="btn btn-secondary btn-sm" data-action="approve">Approve</button>
             <button class="btn-danger-text" data-action="reject">Reject</button>
           </div>
-        ` : ''}
+        ` : (d.status === 'approved' ? `
+          <div class="form-actions">
+            <button class="btn btn-primary btn-sm" data-action="mark-sent">Mark as sent</button>
+            <span class="field-note">Use this after you manually send the approved email. It starts the company conversation and follow-up timer.</span>
+          </div>
+        ` : '')}
       </div>
     `;
   }
@@ -113,12 +118,76 @@
     await loadDrafts();
   }
 
+  async function markDraftSent(card, id) {
+    const prospectId = card.dataset.prospectId;
+    if (!prospectId) return alert('This draft is missing its prospect link.');
+    if (!confirm('Mark this approved email as sent? Only click this after you actually send it manually.')) return;
+
+    const subject = card.querySelector('[data-field="subject"]').value;
+    const body = card.querySelector('[data-field="body"]').value;
+    const now = new Date().toISOString();
+    const nextFollowUp = new Date(Date.now() + 7 * 86400000).toISOString();
+    const closeAfter = new Date(Date.now() + 42 * 86400000).toISOString();
+
+    const { data: conv, error: convError } = await supabase
+      .from('outreach_conversations')
+      .upsert({
+        prospect_id: prospectId,
+        draft_id: id,
+        status: 'active',
+        last_activity_at: now,
+        last_outbound_at: now,
+        next_follow_up_at: nextFollowUp,
+        follow_up_count: 0,
+        close_after_at: closeAfter,
+        closed_at: null,
+        close_reason: null
+      }, { onConflict: 'prospect_id' })
+      .select('id')
+      .single();
+
+    if (convError) {
+      alert(`Conversation setup failed: ${convError.message}\n\nRun sql/outreach-conversations.sql in Supabase if you have not done it yet.`);
+      return;
+    }
+
+    const existing = await supabase.from('outreach_messages')
+      .select('id').eq('conversation_id', conv.id).eq('message_type', 'initial_sent').limit(1);
+    if (!existing.error && !(existing.data || []).length) {
+      const { error: messageError } = await supabase.from('outreach_messages').insert({
+        conversation_id: conv.id,
+        prospect_id: prospectId,
+        direction: 'outbound',
+        message_type: 'initial_sent',
+        subject,
+        body,
+        status: 'sent',
+        ai_status: 'none',
+        sent_at: now
+      });
+      if (messageError) return alert(`Could not save sent email to conversation: ${messageError.message}`);
+    }
+
+    const { error: draftError } = await supabase.from('email_drafts').update({ status: 'sent' }).eq('id', id);
+    if (draftError) return alert(draftError.message);
+    await supabase.from('prospects').update({ status: 'contacted', updated_at: now }).eq('id', prospectId);
+    await supabase.from('activity_log').insert({
+      worker_name: 'Manual Review',
+      action: 'Approved email marked as sent — conversation started.',
+      target_table: 'email_drafts',
+      target_id: id,
+      detail: { prospect_id: prospectId, conversation_id: conv.id }
+    });
+    window.location.href = 'conversations.html';
+  }
+
   function wireCard(container) {
     container.querySelectorAll('[data-draft-id]').forEach(card => {
       const id = card.dataset.draftId;
       const saveBtn = card.querySelector('[data-action="save"]');
       const approveBtn = card.querySelector('[data-action="approve"]');
       const rejectBtn = card.querySelector('[data-action="reject"]');
+      const markSentBtn = card.querySelector('[data-action="mark-sent"]');
 
       if (saveBtn) saveBtn.addEventListener('click', () => {
         updateDraft(id, {
@@ -137,6 +206,7 @@
       if (rejectBtn) rejectBtn.addEventListener('click', () => {
         updateDraft(id, { status: 'rejected' });
       });
+      if (markSentBtn) markSentBtn.addEventListener('click', () => markDraftSent(card, id));
     });
   }
 
