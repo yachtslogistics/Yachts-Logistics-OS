@@ -1,33 +1,7 @@
-YACHT LOGISTICS OS v7.2 — NEXT STEPS
+DEPLOY v7.3 WEBSITE FIRST
 
-A) WEBSITE
-Upload v7.2 files to GitHub.
+1. Upload/replace the website files in GitHub and wait for Cloudflare Pages to deploy.
+2. Check Dashboard and click each sidebar group once.
+3. Stop there and return to ChatGPT.
 
-B) DATABASE — ONCE
-Run: sql/outreach-conversations.sql
-
-C) OUTREACH WRITER
-Replace current Worker code with: workers/outreach-writer-v3-router.js
-Keep its existing Cron and variables.
-
-D) CONTACT FINDER
-Replace current Worker code with: workers/contact-finder-v5-batched.js
-Keep existing Cron. First test ?batch=5 as a dry run.
-
-E) CONVERSATION MANAGER
-Create Worker: conversation-manager
-Code: workers/conversation-manager-v1-router.js
-Variables: AI_ROUTER_URL, ROUTER_SECRET, SUPABASE_URL, SUPABASE_SERVICE_KEY, WORKER_SECRET
-Compatibility flag: global_fetch_strictly_public
-No Cron until one dry/live test succeeds.
-
-F) FIRST REAL CONVERSATION TEST
-1. Edit + Approve one existing outreach draft.
-2. Manually send it yourself.
-3. Click Mark as sent in Drafts.
-4. Open Conversations and paste a sample/real reply from that company.
-5. Run Conversation Manager dry test.
-6. If good, live test and confirm suggested reply appears.
-7. Then add Cron: 15 */6 * * *
-
-Nothing in v7.2 sends email automatically.
+Next guided step: run sql/outreach-conversations.sql once in Supabase.

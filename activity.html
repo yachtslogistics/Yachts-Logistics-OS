@@ -20,18 +20,43 @@
         <div class="sub">Operating System</div>
       </div>
     </div>
-    <ul class="nav-list">
-      <li><a href="dashboard.html">Dashboard</a></li>
-      <li><a href="prospects.html">Prospects</a></li>
-      <li><a href="contacts.html">Contacts</a></li>
-      <li><a href="partners.html">Partners</a></li>
-      <li><a href="pipeline.html">Pipeline</a></li>
-      <li><a href="drafts.html">Drafts</a></li>
-      <li><a href="conversations.html">Conversations</a></li>
-      <li><a href="console.html">Console</a></li>
-      <li><a href="usage.html">Usage</a></li>
-      <li><a href="settings.html">Settings</a></li>
-      <li><a href="activity.html" class="active">Activity Log</a></li>
+    <ul class="nav-list" data-sidebar-nav>
+      <li class="nav-home"><a href="dashboard.html" data-nav-page="dashboard">Dashboard</a></li>
+
+      <li class="nav-section" data-nav-section="business">
+        <button class="nav-group-toggle" type="button" aria-expanded="false">
+          <span>Business Development</span><span class="nav-chevron" aria-hidden="true">›</span>
+        </button>
+        <ul class="nav-sublist">
+          <li><a href="prospects.html" data-nav-page="prospects">Prospects</a></li>
+          <li><a href="contacts.html" data-nav-page="contacts">Contacts</a></li>
+          <li><a href="partners.html" data-nav-page="partners">Partners</a></li>
+          <li><a href="pipeline.html" data-nav-page="pipeline">Pipeline</a></li>
+        </ul>
+      </li>
+
+      <li class="nav-section" data-nav-section="outreach">
+        <button class="nav-group-toggle" type="button" aria-expanded="false">
+          <span>Outreach</span><span class="nav-chevron" aria-hidden="true">›</span>
+        </button>
+        <ul class="nav-sublist">
+          <li><a href="drafts.html" data-nav-page="drafts">Drafts <span class="nav-count" data-nav-count="drafts" hidden></span></a></li>
+          <li><a href="conversations.html" data-nav-page="conversations">Conversations <span class="nav-count" data-nav-count="conversations" hidden></span></a></li>
+          <li><a href="followups.html" data-nav-page="followups">Follow-ups <span class="nav-count" data-nav-count="followups" hidden></span></a></li>
+        </ul>
+      </li>
+
+      <li class="nav-section" data-nav-section="system">
+        <button class="nav-group-toggle" type="button" aria-expanded="false">
+          <span>AI &amp; System</span><span class="nav-chevron" aria-hidden="true">›</span>
+        </button>
+        <ul class="nav-sublist">
+          <li><a href="console.html" data-nav-page="console">Console</a></li>
+          <li><a href="usage.html" data-nav-page="usage">Usage</a></li>
+          <li><a href="activity.html" data-nav-page="activity">Activity Log</a></li>
+          <li><a href="settings.html" data-nav-page="settings">Settings</a></li>
+        </ul>
+      </li>
     </ul>
     <div class="sidebar-footer">
       <div class="user-email" data-user-email>—</div>
@@ -86,5 +111,6 @@
   setInterval(loadLog, 30000);
 </script>
 
+<script type="module" src="./js/navigation.js"></script>
 </body>
 </html>

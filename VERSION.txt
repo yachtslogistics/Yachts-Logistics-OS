@@ -1,1 +1,2 @@
-Yacht Logistics OS v7.2 — batched contacts + Outreach Writer v3 + manual conversation/reply/follow-up workflow
+Yacht Logistics OS site v7.3 — Clean grouped navigation + Follow-ups workspace
+Built from v7.2 conversations package.

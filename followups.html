@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Follow-ups — Yacht Logistics OS</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>⚓</text></svg>">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div class="app-shell">
+  <aside class="sidebar">
+    <div class="sidebar-brand">
+      <div class="mark">⚓</div>
+      <div><div class="name">Yacht Logistics</div><div class="sub">Operating System</div></div>
+    </div>
+    <ul class="nav-list" data-sidebar-nav>
+      <li class="nav-home"><a href="dashboard.html" data-nav-page="dashboard">Dashboard</a></li>
+
+      <li class="nav-section" data-nav-section="business">
+        <button class="nav-group-toggle" type="button" aria-expanded="false">
+          <span>Business Development</span><span class="nav-chevron" aria-hidden="true">›</span>
+        </button>
+        <ul class="nav-sublist">
+          <li><a href="prospects.html" data-nav-page="prospects">Prospects</a></li>
+          <li><a href="contacts.html" data-nav-page="contacts">Contacts</a></li>
+          <li><a href="partners.html" data-nav-page="partners">Partners</a></li>
+          <li><a href="pipeline.html" data-nav-page="pipeline">Pipeline</a></li>
+        </ul>
+      </li>
+
+      <li class="nav-section" data-nav-section="outreach">
+        <button class="nav-group-toggle" type="button" aria-expanded="false">
+          <span>Outreach</span><span class="nav-chevron" aria-hidden="true">›</span>
+        </button>
+        <ul class="nav-sublist">
+          <li><a href="drafts.html" data-nav-page="drafts">Drafts <span class="nav-count" data-nav-count="drafts" hidden></span></a></li>
+          <li><a href="conversations.html" data-nav-page="conversations">Conversations <span class="nav-count" data-nav-count="conversations" hidden></span></a></li>
+          <li><a href="followups.html" data-nav-page="followups">Follow-ups <span class="nav-count" data-nav-count="followups" hidden></span></a></li>
+        </ul>
+      </li>
+
+      <li class="nav-section" data-nav-section="system">
+        <button class="nav-group-toggle" type="button" aria-expanded="false">
+          <span>AI &amp; System</span><span class="nav-chevron" aria-hidden="true">›</span>
+        </button>
+        <ul class="nav-sublist">
+          <li><a href="console.html" data-nav-page="console">Console</a></li>
+          <li><a href="usage.html" data-nav-page="usage">Usage</a></li>
+          <li><a href="activity.html" data-nav-page="activity">Activity Log</a></li>
+          <li><a href="settings.html" data-nav-page="settings">Settings</a></li>
+        </ul>
+      </li>
+    </ul>
+    <div class="sidebar-footer">
+      <div class="user-email" data-user-email>—</div>
+      <button class="btn-signout" data-signout>Sign out</button>
+    </div>
+  </aside>
+
+  <main class="main">
+    <div class="page-header">
+      <h1>Follow-ups</h1>
+      <p>See which active conversations are due for another touch. AI drafts remain review-only.</p>
+    </div>
+
+    <div class="stat-grid stat-grid-3">
+      <div class="stat-card"><div class="label">Due now</div><div class="value" id="due-count">—</div></div>
+      <div class="stat-card"><div class="label">Upcoming</div><div class="value" id="upcoming-count">—</div></div>
+      <div class="stat-card"><div class="label">Active conversations</div><div class="value" id="active-count">—</div></div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-header"><h2>Due now</h2></div>
+      <div id="due-list" class="followup-list"><div class="log-row">Loading…</div></div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-header"><h2>Upcoming</h2></div>
+      <div id="upcoming-list" class="followup-list"><div class="log-row">Loading…</div></div>
+    </div>
+  </main>
+</div>
+
+<script type="module">
+  import { supabase, requireAuth, wireSignOut, timeAgo } from './js/supabaseClient.js';
+  await requireAuth();
+  wireSignOut();
+
+  const esc = v => String(v ?? '').replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+  const rowHtml = (c, isDue) => `
+    <div class="followup-row">
+      <div><div class="followup-company">${esc(c.prospects?.company_name || 'Unknown company')}</div><div class="followup-meta">${esc(c.prospects?.country || '—')} · Follow-ups sent: ${Number(c.follow_up_count || 0)}</div></div>
+      <div class="followup-due ${isDue ? 'due-now' : ''}">${c.next_follow_up_at ? esc(timeAgo(c.next_follow_up_at)) : 'Not scheduled'}</div>
+      <div class="followup-meta">Last activity ${esc(timeAgo(c.last_activity_at))}</div>
+      <a class="btn btn-secondary btn-sm" href="conversations.html?id=${encodeURIComponent(c.id)}">Open conversation</a>
+    </div>`;
+
+  async function load() {
+    const { data, error } = await supabase
+      .from('outreach_conversations')
+      .select('id,status,last_activity_at,next_follow_up_at,follow_up_count,prospects(company_name,country,business_type)')
+      .eq('status', 'active')
+      .order('next_follow_up_at', { ascending: true, nullsFirst: false });
+
+    if (error) {
+      const msg = `<div class="log-row">Follow-ups are not ready yet: ${esc(error.message)}. Run <code>sql/outreach-conversations.sql</code> once in Supabase.</div>`;
+      document.getElementById('due-list').innerHTML = msg;
+      document.getElementById('upcoming-list').innerHTML = '';
+      document.getElementById('due-count').textContent = '0';
+      document.getElementById('upcoming-count').textContent = '0';
+      document.getElementById('active-count').textContent = '0';
+      return;
+    }
+
+    const now = Date.now();
+    const all = data || [];
+    const scheduled = all.filter(c => c.next_follow_up_at);
+    const due = scheduled.filter(c => new Date(c.next_follow_up_at).getTime() <= now);
+    const upcoming = scheduled.filter(c => new Date(c.next_follow_up_at).getTime() > now);
+    document.getElementById('due-count').textContent = due.length;
+    document.getElementById('upcoming-count').textContent = upcoming.length;
+    document.getElementById('active-count').textContent = all.length;
+    document.getElementById('due-list').innerHTML = due.length ? due.map(c => rowHtml(c, true)).join('') : '<div class="log-row">Nothing is due right now.</div>';
+    document.getElementById('upcoming-list').innerHTML = upcoming.length ? upcoming.map(c => rowHtml(c, false)).join('') : '<div class="log-row">No upcoming follow-ups scheduled yet.</div>';
+  }
+  await load();
+</script>
+<script type="module" src="./js/navigation.js"></script>
+</body>
+</html>
