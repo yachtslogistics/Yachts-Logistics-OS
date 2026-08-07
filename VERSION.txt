@@ -1,2 +1,1 @@
-Yacht Logistics OS site v7.3 — Clean grouped navigation + Follow-ups workspace
-Built from v7.2 conversations package.
+Yacht Logistics OS v7.4 — Draft Recipient Display

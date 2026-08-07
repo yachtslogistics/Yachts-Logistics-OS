@@ -1,7 +1,14 @@
-DEPLOY v7.3 WEBSITE FIRST
+Yacht Logistics OS v7.4 — Draft Recipient Display
 
-1. Upload/replace the website files in GitHub and wait for Cloudflare Pages to deploy.
-2. Check Dashboard and click each sidebar group once.
-3. Stop there and return to ChatGPT.
+Website-only usability update.
 
-Next guided step: run sql/outreach-conversations.sql once in Supabase.
+What changed:
+- Draft cards now show the recipient business email directly under the company name.
+- Recipient email is clickable (mailto:).
+- Added a Copy email button.
+- If a contact has a name/role, it appears next to the email.
+- Works for both pending and handled drafts.
+
+No Worker code, Cron triggers, Supabase schema, AI Router, or AI provider settings need to change for this update.
+
+Deploy: upload/replace the website files in GitHub as usual.

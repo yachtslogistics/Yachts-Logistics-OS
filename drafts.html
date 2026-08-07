@@ -102,13 +102,24 @@
     }[m]));
   }
 
-  function draftCard(d, editable) {
+  function draftCard(d, editable, contactByProspect) {
     const companyName = d.prospects?.company_name || 'Unknown company';
+    const contact = contactByProspect.get(d.prospect_id) || null;
+    const recipientEmail = contact?.email || '';
+    const contactLabel = contact?.name ? `${contact.name}${contact.role ? ` · ${contact.role}` : ''}` : (contact?.role || '');
     return `
       <div class="panel" style="margin-bottom: 12px;" data-draft-id="${d.id}" data-prospect-id="${d.prospect_id || ''}">
         <div class="panel-header">
           <h2 style="font-size: 14px;">${escapeHtml(companyName)} <span style="color: var(--text-faint); font-weight: 400;">· ${escapeHtml(d.template_type || 'general')}</span></h2>
           <span class="badge badge-${d.status === 'approved' ? 'approved' : d.status === 'rejected' ? 'lost' : 'draft_ready'}">${escapeHtml(d.status || 'draft')}</span>
+        </div>
+        <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin:-4px 0 14px 0; color:var(--text-muted); font-size:12px;">
+          <strong style="color:var(--text);">To:</strong>
+          ${recipientEmail
+            ? `<a href="mailto:${escapeHtml(recipientEmail)}" style="color:var(--accent-2); text-decoration:none;">${escapeHtml(recipientEmail)}</a>
+               <button type="button" class="btn btn-secondary btn-sm" style="padding:4px 8px;" data-copy-email="${escapeHtml(recipientEmail)}">Copy email</button>`
+            : `<span style="color:var(--warning);">No business email found for this prospect</span>`}
+          ${contactLabel ? `<span style="color:var(--text-faint);">${escapeHtml(contactLabel)}</span>` : ''}
         </div>
         <label>Subject</label>
         <input type="text" value="${escapeHtml(d.subject || '')}" ${editable ? '' : 'disabled'} data-field="subject">
@@ -208,6 +219,21 @@
   }
 
   function wireCard(container) {
+    container.querySelectorAll('[data-copy-email]').forEach(button => {
+      button.addEventListener('click', async () => {
+        const email = button.dataset.copyEmail || '';
+        if (!email) return;
+        try {
+          await navigator.clipboard.writeText(email);
+          const previous = button.textContent;
+          button.textContent = 'Copied';
+          setTimeout(() => { button.textContent = previous; }, 1200);
+        } catch (_error) {
+          prompt('Copy recipient email:', email);
+        }
+      });
+    });
+
     container.querySelectorAll('[data-draft-id]').forEach(card => {
       const id = card.dataset.draftId;
       const saveBtn = card.querySelector('[data-action="save"]');
@@ -251,18 +277,40 @@
       return;
     }
 
+    const prospectIds = [...new Set((data || []).map(d => d.prospect_id).filter(Boolean))];
+    const contactByProspect = new Map();
+
+    if (prospectIds.length) {
+      const { data: contacts, error: contactsError } = await supabase
+        .from('contacts')
+        .select('prospect_id,name,role,email,verified')
+        .in('prospect_id', prospectIds)
+        .not('email', 'is', null);
+
+      if (!contactsError) {
+        for (const contact of contacts || []) {
+          const current = contactByProspect.get(contact.prospect_id);
+          // Prefer a verified email, but still show an available business email if needed.
+          if (!current || (!current.verified && contact.verified)) {
+            contactByProspect.set(contact.prospect_id, contact);
+          }
+        }
+      }
+    }
+
     const pendingDrafts = (data || []).filter(d => d.status === 'draft');
     const handledDrafts = (data || []).filter(d => d.status !== 'draft');
 
     pending.innerHTML = pendingDrafts.length
-      ? pendingDrafts.map(d => draftCard(d, true)).join('')
+      ? pendingDrafts.map(d => draftCard(d, true, contactByProspect)).join('')
       : '<div class="log-row">No drafts waiting. Once the Outreach Writer is built, AI-generated emails will show up here for your approval — nothing sends automatically.</div>';
 
     handled.innerHTML = handledDrafts.length
-      ? handledDrafts.map(d => draftCard(d, false)).join('')
+      ? handledDrafts.map(d => draftCard(d, false, contactByProspect)).join('')
       : '<div class="log-row">Nothing approved or rejected yet.</div>';
 
     wireCard(pending);
+    wireCard(handled);
   }
 
   await loadDrafts();
