@@ -1,1 +1,236 @@
-Yacht Logistics OS v7.4 — Draft Recipient Display
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Usage — Yacht Logistics OS</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>⚓</text></svg>">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div class="app-shell">
+  <aside class="sidebar">
+    <div class="sidebar-brand">
+      <div class="mark">⚓</div>
+      <div><div class="name">Yacht Logistics</div><div class="sub">Operating System</div></div>
+    </div>
+    <ul class="nav-list" data-sidebar-nav>
+      <li class="nav-home"><a href="dashboard.html" data-nav-page="dashboard">Dashboard</a></li>
+
+      <li class="nav-section" data-nav-section="business">
+        <button class="nav-group-toggle" type="button" aria-expanded="false">
+          <span>Business Development</span><span class="nav-chevron" aria-hidden="true">›</span>
+        </button>
+        <ul class="nav-sublist">
+          <li><a href="prospects.html" data-nav-page="prospects">Prospects</a></li>
+          <li><a href="contacts.html" data-nav-page="contacts">Contacts</a></li>
+          <li><a href="partners.html" data-nav-page="partners">Partners</a></li>
+          <li><a href="pipeline.html" data-nav-page="pipeline">Pipeline</a></li>
+        </ul>
+      </li>
+
+      <li class="nav-section" data-nav-section="outreach">
+        <button class="nav-group-toggle" type="button" aria-expanded="false">
+          <span>Outreach</span><span class="nav-chevron" aria-hidden="true">›</span>
+        </button>
+        <ul class="nav-sublist">
+          <li><a href="drafts.html" data-nav-page="drafts">Drafts <span class="nav-count" data-nav-count="drafts" hidden></span></a></li>
+          <li><a href="conversations.html" data-nav-page="conversations">Conversations <span class="nav-count" data-nav-count="conversations" hidden></span></a></li>
+          <li><a href="followups.html" data-nav-page="followups">Follow-ups <span class="nav-count" data-nav-count="followups" hidden></span></a></li>
+        </ul>
+      </li>
+
+      <li class="nav-section" data-nav-section="system">
+        <button class="nav-group-toggle" type="button" aria-expanded="false">
+          <span>AI &amp; System</span><span class="nav-chevron" aria-hidden="true">›</span>
+        </button>
+        <ul class="nav-sublist">
+          <li><a href="console.html" data-nav-page="console">Console</a></li>
+          <li><a href="usage.html" data-nav-page="usage">Usage</a></li>
+          <li><a href="activity.html" data-nav-page="activity">Activity Log</a></li>
+          <li><a href="settings.html" data-nav-page="settings">Settings</a></li>
+        </ul>
+      </li>
+    </ul>
+    <div class="sidebar-footer">
+      <div class="user-email" data-user-email>—</div>
+      <button class="btn-signout" data-signout>Sign out</button>
+    </div>
+  </aside>
+
+  <main class="main">
+    <div class="page-header">
+      <h1>API Usage</h1>
+      <p><span class="live-dot"></span>Read-only usage ledger for AI providers and workers. <span id="usage-updated"></span></p>
+    </div>
+
+    <div id="usage-warning" class="info-banner" style="display:none;"></div>
+
+    <div class="stat-grid">
+      <div class="stat-card"><div class="label">Month spend recorded</div><div class="value value-small" id="usage-spend">—</div></div>
+      <div class="stat-card"><div class="label">Month requests</div><div class="value" id="usage-requests">—</div></div>
+      <div class="stat-card"><div class="label">Month tokens</div><div class="value value-small" id="usage-tokens">—</div></div>
+      <div class="stat-card"><div class="label">Web searches</div><div class="value" id="usage-searches">—</div></div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-header"><h2>By provider</h2></div>
+      <div id="provider-cards" class="provider-grid"><div class="muted">Loading…</div></div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-header panel-header-wrap">
+        <div>
+          <h2>Recent usage rows</h2>
+          <div class="panel-subtext">This shows workers that write to <code>api_usage</code>. Older workers that only write to Activity Log will not appear here until they are upgraded/routed.</div>
+        </div>
+        <select id="usage-provider" class="console-filter">
+          <option value="all">All providers</option>
+          <option value="openai">OpenAI</option>
+          <option value="groq">Groq</option>
+          <option value="gemini">Gemini</option>
+        </select>
+      </div>
+      <div class="table-scroll">
+        <table>
+          <thead>
+            <tr>
+              <th>Time</th>
+              <th>Provider</th>
+              <th>Model</th>
+              <th>Worker</th>
+              <th>Tokens</th>
+              <th>Cost</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody id="usage-tbody">
+            <tr class="empty-row"><td colspan="7">Loading…</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </main>
+</div>
+
+<script type="module">
+  import { supabase, requireAuth, wireSignOut, timeAgo } from './js/supabaseClient.js';
+
+  await requireAuth();
+  wireSignOut();
+
+  const tbody = document.getElementById('usage-tbody');
+  const filter = document.getElementById('usage-provider');
+  const warning = document.getElementById('usage-warning');
+  let rows = [];
+
+  function escapeHtml(value) {
+    return String(value ?? '').replace(/[&<>"']/g, m => ({
+      '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
+    }[m]));
+  }
+
+  function money(n) {
+    const value = Number(n || 0);
+    if (!Number.isFinite(value)) return '$0.0000';
+    return '$' + value.toFixed(value >= 1 ? 4 : 6);
+  }
+
+  function number(n) {
+    return new Intl.NumberFormat('en-US').format(Number(n || 0));
+  }
+
+  function rowCost(r) {
+    const billed = Number(r.billed_cost_usd);
+    if (Number.isFinite(billed) && billed >= 0) return billed;
+    return Number(r.estimated_cost_usd || 0);
+  }
+
+  function monthStartIso() {
+    const now = new Date();
+    return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)).toISOString();
+  }
+
+  function render() {
+    const currentMonth = rows.filter(r => new Date(r.created_at) >= new Date(monthStartIso()));
+    const spend = currentMonth.reduce((s, r) => s + rowCost(r), 0);
+    const tokens = currentMonth.reduce((s, r) => s + Number(r.total_tokens || 0), 0);
+    const searches = currentMonth.reduce((s, r) => s + Number(r.web_search_calls || 0), 0);
+
+    document.getElementById('usage-spend').textContent = money(spend);
+    document.getElementById('usage-requests').textContent = number(currentMonth.length);
+    document.getElementById('usage-tokens').textContent = number(tokens);
+    document.getElementById('usage-searches').textContent = number(searches);
+
+    const grouped = {};
+    for (const r of currentMonth) {
+      const key = r.provider || 'unknown';
+      grouped[key] ||= { requests:0, tokens:0, cost:0 };
+      grouped[key].requests++;
+      grouped[key].tokens += Number(r.total_tokens || 0);
+      grouped[key].cost += rowCost(r);
+    }
+
+    const providerBox = document.getElementById('provider-cards');
+    const providerKeys = ['openai','groq','gemini'];
+    providerBox.innerHTML = providerKeys.map(key => {
+      const g = grouped[key] || { requests:0, tokens:0, cost:0 };
+      return `<div class="mini-card">
+        <div class="mini-title">${escapeHtml(key.toUpperCase())}</div>
+        <div class="mini-metric">${number(g.requests)} requests</div>
+        <div class="mini-note">${number(g.tokens)} tokens · ${money(g.cost)}</div>
+      </div>`;
+    }).join('');
+
+    const selected = filter.value;
+    const shown = rows.filter(r => selected === 'all' || r.provider === selected).slice(0, 200);
+
+    if (shown.length === 0) {
+      tbody.innerHTML = '<tr class="empty-row"><td colspan="7">No usage rows recorded for this filter yet.</td></tr>';
+    } else {
+      tbody.innerHTML = shown.map(r => {
+        const status = String(r.status || 'completed').toLowerCase();
+        const statusClass = status === 'failed' ? 'badge-lost' : status === 'skipped' ? 'badge-contacted' : 'badge-approved';
+        return `<tr>
+          <td>${escapeHtml(timeAgo(r.created_at))}</td>
+          <td><strong>${escapeHtml(r.provider || '—')}</strong></td>
+          <td class="mono-cell">${escapeHtml(r.model || '—')}</td>
+          <td>${escapeHtml(r.worker_name || '—')}</td>
+          <td>${number(r.total_tokens || 0)}</td>
+          <td>${money(rowCost(r))}</td>
+          <td><span class="badge ${statusClass}">${escapeHtml(status)}</span></td>
+        </tr>`;
+      }).join('');
+    }
+  }
+
+  async function loadUsage() {
+    const { data, error } = await supabase
+      .from('api_usage').select('*')
+      .order('created_at', { ascending: false })
+      .limit(1000);
+
+    if (error) {
+      warning.style.display = 'block';
+      warning.innerHTML = '<strong>Usage ledger unavailable.</strong> Run the included <code>sql/api-usage-ledger.sql</code> in Supabase if this table has not been created yet. The rest of the site still works.';
+      tbody.innerHTML = `<tr class="empty-row"><td colspan="7">Could not read api_usage: ${escapeHtml(error.message)}</td></tr>`;
+      rows = [];
+      render();
+      return;
+    }
+
+    warning.style.display = 'none';
+    rows = data || [];
+    document.getElementById('usage-updated').textContent = 'Updated ' + timeAgo(new Date().toISOString());
+    render();
+  }
+
+  filter.addEventListener('change', render);
+  await loadUsage();
+  setInterval(loadUsage, 30000);
+</script>
+<script type="module" src="./js/navigation.js"></script>
+</body>
+</html>

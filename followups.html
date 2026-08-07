@@ -3,18 +3,22 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Follow-ups — Yacht Logistics OS</title>
+<title>Drafts — Yacht Logistics OS</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>⚓</text></svg>">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
+
 <div class="app-shell">
   <aside class="sidebar">
     <div class="sidebar-brand">
       <div class="mark">⚓</div>
-      <div><div class="name">Yacht Logistics</div><div class="sub">Operating System</div></div>
+      <div>
+        <div class="name">Yacht Logistics</div>
+        <div class="sub">Operating System</div>
+      </div>
     </div>
     <ul class="nav-list" data-sidebar-nav>
       <li class="nav-home"><a href="dashboard.html" data-nav-page="dashboard">Dashboard</a></li>
@@ -62,72 +66,257 @@
 
   <main class="main">
     <div class="page-header">
-      <h1>Follow-ups</h1>
-      <p>See which active conversations are due for another touch. AI drafts remain review-only.</p>
-    </div>
-
-    <div class="stat-grid stat-grid-3">
-      <div class="stat-card"><div class="label">Due now</div><div class="value" id="due-count">—</div></div>
-      <div class="stat-card"><div class="label">Upcoming</div><div class="value" id="upcoming-count">—</div></div>
-      <div class="stat-card"><div class="label">Active conversations</div><div class="value" id="active-count">—</div></div>
+      <h1>Drafts</h1>
+      <p>Every AI-written email lands here first. Nothing sends until you approve it and send it yourself.</p>
     </div>
 
     <div class="panel">
-      <div class="panel-header"><h2>Due now</h2></div>
-      <div id="due-list" class="followup-list"><div class="log-row">Loading…</div></div>
+      <div class="panel-header">
+        <h2>Awaiting your review</h2>
+      </div>
+      <div id="drafts-list">
+        <div class="log-row">Loading…</div>
+      </div>
     </div>
 
     <div class="panel">
-      <div class="panel-header"><h2>Upcoming</h2></div>
-      <div id="upcoming-list" class="followup-list"><div class="log-row">Loading…</div></div>
+      <div class="panel-header">
+        <h2>Already handled</h2>
+      </div>
+      <div id="drafts-handled">
+        <div class="log-row">Loading…</div>
+      </div>
     </div>
   </main>
 </div>
 
 <script type="module">
   import { supabase, requireAuth, wireSignOut, timeAgo } from './js/supabaseClient.js';
+
   await requireAuth();
   wireSignOut();
 
-  const esc = v => String(v ?? '').replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
-  const rowHtml = (c, isDue) => `
-    <div class="followup-row">
-      <div><div class="followup-company">${esc(c.prospects?.company_name || 'Unknown company')}</div><div class="followup-meta">${esc(c.prospects?.country || '—')} · Follow-ups sent: ${Number(c.follow_up_count || 0)}</div></div>
-      <div class="followup-due ${isDue ? 'due-now' : ''}">${c.next_follow_up_at ? esc(timeAgo(c.next_follow_up_at)) : 'Not scheduled'}</div>
-      <div class="followup-meta">Last activity ${esc(timeAgo(c.last_activity_at))}</div>
-      <a class="btn btn-secondary btn-sm" href="conversations.html?id=${encodeURIComponent(c.id)}">Open conversation</a>
-    </div>`;
+  function escapeHtml(str) {
+    return String(str).replace(/[&<>"']/g, m => ({
+      '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+    }[m]));
+  }
 
-  async function load() {
-    const { data, error } = await supabase
+  function draftCard(d, editable, contactByProspect) {
+    const companyName = d.prospects?.company_name || 'Unknown company';
+    const contact = contactByProspect.get(d.prospect_id) || null;
+    const recipientEmail = contact?.email || '';
+    const contactLabel = contact?.name ? `${contact.name}${contact.role ? ` · ${contact.role}` : ''}` : (contact?.role || '');
+    return `
+      <div class="panel" style="margin-bottom: 12px;" data-draft-id="${d.id}" data-prospect-id="${d.prospect_id || ''}">
+        <div class="panel-header">
+          <h2 style="font-size: 14px;">${escapeHtml(companyName)} <span style="color: var(--text-faint); font-weight: 400;">· ${escapeHtml(d.template_type || 'general')}</span></h2>
+          <span class="badge badge-${d.status === 'approved' ? 'approved' : d.status === 'rejected' ? 'lost' : 'draft_ready'}">${escapeHtml(d.status || 'draft')}</span>
+        </div>
+        <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin:-4px 0 14px 0; color:var(--text-muted); font-size:12px;">
+          <strong style="color:var(--text);">To:</strong>
+          ${recipientEmail
+            ? `<a href="mailto:${escapeHtml(recipientEmail)}" style="color:var(--accent-2); text-decoration:none;">${escapeHtml(recipientEmail)}</a>
+               <button type="button" class="btn btn-secondary btn-sm" style="padding:4px 8px;" data-copy-email="${escapeHtml(recipientEmail)}">Copy email</button>`
+            : `<span style="color:var(--warning);">No business email found for this prospect</span>`}
+          ${contactLabel ? `<span style="color:var(--text-faint);">${escapeHtml(contactLabel)}</span>` : ''}
+        </div>
+        <label>Subject</label>
+        <input type="text" value="${escapeHtml(d.subject || '')}" ${editable ? '' : 'disabled'} data-field="subject">
+        <label>Body</label>
+        <textarea style="min-height: 140px;" ${editable ? '' : 'disabled'} data-field="body">${escapeHtml(d.body || '')}</textarea>
+        <div style="color: var(--text-faint); font-size: 11px; margin: -8px 0 12px 0;">Created ${timeAgo(d.created_at)}</div>
+        ${editable ? `
+          <div class="form-actions">
+            <button class="btn btn-primary btn-sm" data-action="save">Save edits</button>
+            <button class="btn btn-secondary btn-sm" data-action="approve">Approve</button>
+            <button class="btn-danger-text" data-action="reject">Reject</button>
+          </div>
+        ` : (d.status === 'approved' ? `
+          <div class="form-actions">
+            <button class="btn btn-primary btn-sm" data-action="mark-sent">Mark as sent</button>
+            <span class="field-note">Use this after you manually send the approved email. It starts the company conversation and follow-up timer.</span>
+          </div>
+        ` : '')}
+      </div>
+    `;
+  }
+
+  async function updateDraft(id, patch) {
+    const { error } = await supabase.from('email_drafts').update(patch).eq('id', id);
+    if (error) { alert(error.message); return; }
+    await supabase.from('activity_log').insert({
+      worker_name: 'Manual Review',
+      action: `Draft ${patch.status || 'updated'}`,
+      target_table: 'email_drafts',
+      target_id: id,
+      detail: patch
+    });
+    await loadDrafts();
+  }
+
+  async function markDraftSent(card, id) {
+    const prospectId = card.dataset.prospectId;
+    if (!prospectId) return alert('This draft is missing its prospect link.');
+    if (!confirm('Mark this approved email as sent? Only click this after you actually send it manually.')) return;
+
+    const subject = card.querySelector('[data-field="subject"]').value;
+    const body = card.querySelector('[data-field="body"]').value;
+    const now = new Date().toISOString();
+    const nextFollowUp = new Date(Date.now() + 7 * 86400000).toISOString();
+    const closeAfter = new Date(Date.now() + 42 * 86400000).toISOString();
+
+    const { data: conv, error: convError } = await supabase
       .from('outreach_conversations')
-      .select('id,status,last_activity_at,next_follow_up_at,follow_up_count,prospects(company_name,country,business_type)')
-      .eq('status', 'active')
-      .order('next_follow_up_at', { ascending: true, nullsFirst: false });
+      .upsert({
+        prospect_id: prospectId,
+        draft_id: id,
+        status: 'active',
+        last_activity_at: now,
+        last_outbound_at: now,
+        next_follow_up_at: nextFollowUp,
+        follow_up_count: 0,
+        close_after_at: closeAfter,
+        closed_at: null,
+        close_reason: null
+      }, { onConflict: 'prospect_id' })
+      .select('id')
+      .single();
 
-    if (error) {
-      const msg = `<div class="log-row">Follow-ups are not ready yet: ${esc(error.message)}. Run <code>sql/outreach-conversations.sql</code> once in Supabase.</div>`;
-      document.getElementById('due-list').innerHTML = msg;
-      document.getElementById('upcoming-list').innerHTML = '';
-      document.getElementById('due-count').textContent = '0';
-      document.getElementById('upcoming-count').textContent = '0';
-      document.getElementById('active-count').textContent = '0';
+    if (convError) {
+      alert(`Conversation setup failed: ${convError.message}\n\nRun sql/outreach-conversations.sql in Supabase if you have not done it yet.`);
       return;
     }
 
-    const now = Date.now();
-    const all = data || [];
-    const scheduled = all.filter(c => c.next_follow_up_at);
-    const due = scheduled.filter(c => new Date(c.next_follow_up_at).getTime() <= now);
-    const upcoming = scheduled.filter(c => new Date(c.next_follow_up_at).getTime() > now);
-    document.getElementById('due-count').textContent = due.length;
-    document.getElementById('upcoming-count').textContent = upcoming.length;
-    document.getElementById('active-count').textContent = all.length;
-    document.getElementById('due-list').innerHTML = due.length ? due.map(c => rowHtml(c, true)).join('') : '<div class="log-row">Nothing is due right now.</div>';
-    document.getElementById('upcoming-list').innerHTML = upcoming.length ? upcoming.map(c => rowHtml(c, false)).join('') : '<div class="log-row">No upcoming follow-ups scheduled yet.</div>';
+    const existing = await supabase.from('outreach_messages')
+      .select('id').eq('conversation_id', conv.id).eq('message_type', 'initial_sent').limit(1);
+    if (!existing.error && !(existing.data || []).length) {
+      const { error: messageError } = await supabase.from('outreach_messages').insert({
+        conversation_id: conv.id,
+        prospect_id: prospectId,
+        direction: 'outbound',
+        message_type: 'initial_sent',
+        subject,
+        body,
+        status: 'sent',
+        ai_status: 'none',
+        sent_at: now
+      });
+      if (messageError) return alert(`Could not save sent email to conversation: ${messageError.message}`);
+    }
+
+    const { error: draftError } = await supabase.from('email_drafts').update({ status: 'sent' }).eq('id', id);
+    if (draftError) return alert(draftError.message);
+    await supabase.from('prospects').update({ status: 'contacted', updated_at: now }).eq('id', prospectId);
+    await supabase.from('activity_log').insert({
+      worker_name: 'Manual Review',
+      action: 'Approved email marked as sent — conversation started.',
+      target_table: 'email_drafts',
+      target_id: id,
+      detail: { prospect_id: prospectId, conversation_id: conv.id }
+    });
+    window.location.href = 'conversations.html';
   }
-  await load();
+
+  function wireCard(container) {
+    container.querySelectorAll('[data-copy-email]').forEach(button => {
+      button.addEventListener('click', async () => {
+        const email = button.dataset.copyEmail || '';
+        if (!email) return;
+        try {
+          await navigator.clipboard.writeText(email);
+          const previous = button.textContent;
+          button.textContent = 'Copied';
+          setTimeout(() => { button.textContent = previous; }, 1200);
+        } catch (_error) {
+          prompt('Copy recipient email:', email);
+        }
+      });
+    });
+
+    container.querySelectorAll('[data-draft-id]').forEach(card => {
+      const id = card.dataset.draftId;
+      const saveBtn = card.querySelector('[data-action="save"]');
+      const approveBtn = card.querySelector('[data-action="approve"]');
+      const rejectBtn = card.querySelector('[data-action="reject"]');
+      const markSentBtn = card.querySelector('[data-action="mark-sent"]');
+
+      if (saveBtn) saveBtn.addEventListener('click', () => {
+        updateDraft(id, {
+          subject: card.querySelector('[data-field="subject"]').value,
+          body: card.querySelector('[data-field="body"]').value
+        });
+      });
+      if (approveBtn) approveBtn.addEventListener('click', () => {
+        updateDraft(id, {
+          subject: card.querySelector('[data-field="subject"]').value,
+          body: card.querySelector('[data-field="body"]').value,
+          status: 'approved',
+          approved_by: 'You'
+        });
+      });
+      if (rejectBtn) rejectBtn.addEventListener('click', () => {
+        updateDraft(id, { status: 'rejected' });
+      });
+      if (markSentBtn) markSentBtn.addEventListener('click', () => markDraftSent(card, id));
+    });
+  }
+
+  async function loadDrafts() {
+    const { data, error } = await supabase
+      .from('email_drafts')
+      .select('*, prospects(company_name)')
+      .order('created_at', { ascending: false });
+
+    const pending = document.getElementById('drafts-list');
+    const handled = document.getElementById('drafts-handled');
+
+    if (error) {
+      pending.innerHTML = `<div class="log-row">Error loading drafts: ${error.message}</div>`;
+      handled.innerHTML = '';
+      return;
+    }
+
+    const prospectIds = [...new Set((data || []).map(d => d.prospect_id).filter(Boolean))];
+    const contactByProspect = new Map();
+
+    if (prospectIds.length) {
+      const { data: contacts, error: contactsError } = await supabase
+        .from('contacts')
+        .select('prospect_id,name,role,email,verified')
+        .in('prospect_id', prospectIds)
+        .not('email', 'is', null);
+
+      if (!contactsError) {
+        for (const contact of contacts || []) {
+          const current = contactByProspect.get(contact.prospect_id);
+          // Prefer a verified email, but still show an available business email if needed.
+          if (!current || (!current.verified && contact.verified)) {
+            contactByProspect.set(contact.prospect_id, contact);
+          }
+        }
+      }
+    }
+
+    const pendingDrafts = (data || []).filter(d => d.status === 'draft');
+    const handledDrafts = (data || []).filter(d => d.status !== 'draft');
+
+    pending.innerHTML = pendingDrafts.length
+      ? pendingDrafts.map(d => draftCard(d, true, contactByProspect)).join('')
+      : '<div class="log-row">No drafts waiting. Once the Outreach Writer is built, AI-generated emails will show up here for your approval — nothing sends automatically.</div>';
+
+    handled.innerHTML = handledDrafts.length
+      ? handledDrafts.map(d => draftCard(d, false, contactByProspect)).join('')
+      : '<div class="log-row">Nothing approved or rejected yet.</div>';
+
+    wireCard(pending);
+    wireCard(handled);
+  }
+
+  await loadDrafts();
+  setInterval(loadDrafts, 30000);
 </script>
+
 <script type="module" src="./js/navigation.js"></script>
 </body>
 </html>

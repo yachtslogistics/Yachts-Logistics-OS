@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Prospects — Yacht Logistics OS</title>
+<title>Pipeline — Yacht Logistics OS</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>⚓</text></svg>">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -64,246 +64,80 @@
     </div>
   </aside>
 
-  <main class="main">
+  <main class="main" style="max-width: none;">
     <div class="page-header">
-      <h1>Prospects</h1>
-      <p>Every company goes in here manually for now — AI research joins in Milestone 2.</p>
+      <h1>Pipeline</h1>
+      <p>Move a prospect's stage using the dropdown on its card — changes save immediately.</p>
     </div>
 
-    <div class="panel">
-      <div class="panel-header">
-        <h2 id="form-title">Add a prospect</h2>
-        <button class="btn btn-secondary btn-sm" id="cancel-edit-btn" style="display:none;">Cancel edit</button>
-      </div>
-
-      <form id="prospect-form">
-        <input type="hidden" id="prospect-id">
-        <div class="form-grid">
-          <div>
-            <label for="company_name">Company name *</label>
-            <input type="text" id="company_name" required>
-          </div>
-          <div>
-            <label for="country">Country</label>
-            <input type="text" id="country">
-          </div>
-          <div>
-            <label for="website">Website</label>
-            <input type="text" id="website" placeholder="https://">
-          </div>
-          <div>
-            <label for="business_type">Business type</label>
-            <select id="business_type">
-              <option value="">Select…</option>
-              <option>Shipowner</option>
-              <option>Ship Manager</option>
-              <option>Vessel Operator</option>
-              <option>Charterer</option>
-              <option>Shipbroker</option>
-              <option>Freight Forwarder</option>
-              <option>Offshore & Marine</option>
-              <option>Overseas Agent</option>
-              <option>Other</option>
-            </select>
-          </div>
-          <div>
-            <label for="oman_relevance_score">Oman relevance score (0–100)</label>
-            <input type="number" id="oman_relevance_score" min="0" max="100">
-          </div>
-          <div>
-            <label for="status">Status</label>
-            <select id="status">
-              <option value="discovered">Discovered</option>
-              <option value="researched">Researched</option>
-              <option value="draft_ready">Draft Ready</option>
-              <option value="approved">Approved</option>
-              <option value="contacted">Contacted</option>
-              <option value="follow_up_due">Follow-up Due</option>
-              <option value="replied">Replied</option>
-              <option value="meeting">Meeting</option>
-              <option value="quotation">Quotation</option>
-              <option value="won">Won</option>
-              <option value="lost">Lost</option>
-            </select>
-          </div>
-          <div class="full">
-            <label for="fleet_info">Fleet / vessel information</label>
-            <textarea id="fleet_info"></textarea>
-          </div>
-          <div class="full">
-            <label for="relevance_reason">Why they may need Oman services</label>
-            <textarea id="relevance_reason"></textarea>
-          </div>
-          <div class="full">
-            <label for="source_links">Source links (one per line — evidence for this record)</label>
-            <textarea id="source_links" placeholder="https://..."></textarea>
-          </div>
-        </div>
-
-        <div class="error-text" id="form-error"></div>
-
-        <div class="form-actions">
-          <button type="submit" class="btn btn-primary" id="save-btn">Save prospect</button>
-        </div>
-      </form>
-    </div>
-
-    <div class="panel">
-      <div class="panel-header">
-        <h2>All prospects</h2>
-      </div>
-      <table>
-        <thead>
-          <tr>
-            <th>Company</th>
-            <th>Country</th>
-            <th>Type</th>
-            <th>Score</th>
-            <th>Status</th>
-            <th></th>
-          </tr>
-        </thead>
-        <tbody id="prospects-tbody">
-          <tr class="empty-row"><td colspan="6">Loading…</td></tr>
-        </tbody>
-      </table>
+    <div class="kanban" id="kanban-board">
+      <div class="kanban-col"><h3>Loading…</h3></div>
     </div>
   </main>
 </div>
 
 <script type="module">
-  import { supabase, requireAuth, wireSignOut, logActivity, statusBadge } from './js/supabaseClient.js';
+  import { supabase, requireAuth, wireSignOut, logActivity, STATUS_ORDER, STATUS_LABELS } from './js/supabaseClient.js';
 
   await requireAuth();
   wireSignOut();
 
-  const form = document.getElementById('prospect-form');
-  const errorBox = document.getElementById('form-error');
-  const saveBtn = document.getElementById('save-btn');
-  const formTitle = document.getElementById('form-title');
-  const cancelBtn = document.getElementById('cancel-edit-btn');
-  const idField = document.getElementById('prospect-id');
+  const board = document.getElementById('kanban-board');
 
-  function resetForm() {
-    form.reset();
-    idField.value = '';
-    formTitle.textContent = 'Add a prospect';
-    saveBtn.textContent = 'Save prospect';
-    cancelBtn.style.display = 'none';
+  function statusOptionsHtml(current) {
+    return STATUS_ORDER.map(s =>
+      `<option value="${s}" ${s === current ? 'selected' : ''}>${STATUS_LABELS[s]}</option>`
+    ).join('');
   }
 
-  cancelBtn.addEventListener('click', resetForm);
-
-  function readForm() {
-    const linksRaw = document.getElementById('source_links').value.trim();
-    return {
-      company_name: document.getElementById('company_name').value.trim(),
-      country: document.getElementById('country').value.trim() || null,
-      website: document.getElementById('website').value.trim() || null,
-      business_type: document.getElementById('business_type').value || null,
-      oman_relevance_score: document.getElementById('oman_relevance_score').value
-        ? parseInt(document.getElementById('oman_relevance_score').value, 10) : null,
-      status: document.getElementById('status').value || 'discovered',
-      fleet_info: document.getElementById('fleet_info').value.trim() || null,
-      relevance_reason: document.getElementById('relevance_reason').value.trim() || null,
-      source_links: linksRaw ? linksRaw.split('\n').map(s => s.trim()).filter(Boolean) : null,
-      updated_at: new Date().toISOString()
-    };
-  }
-
-  form.addEventListener('submit', async (e) => {
-    e.preventDefault();
-    errorBox.textContent = '';
-    saveBtn.disabled = true;
-
-    const payload = readForm();
-    if (!payload.company_name) {
-      errorBox.textContent = 'Company name is required.';
-      saveBtn.disabled = false;
-      return;
-    }
-
-    const editingId = idField.value;
-
-    if (editingId) {
-      const { error } = await supabase.from('prospects').update(payload).eq('id', editingId);
-      if (error) { errorBox.textContent = error.message; saveBtn.disabled = false; return; }
-      await logActivity('Manual Entry', `Updated prospect "${payload.company_name}"`, 'prospects', editingId, payload);
-    } else {
-      const { data, error } = await supabase.from('prospects').insert(payload).select().single();
-      if (error) { errorBox.textContent = error.message; saveBtn.disabled = false; return; }
-      await logActivity('Manual Entry', `Added prospect "${payload.company_name}"`, 'prospects', data.id, payload);
-    }
-
-    saveBtn.disabled = false;
-    resetForm();
-    await loadProspects();
-  });
-
-  async function editProspect(id) {
-    const { data, error } = await supabase.from('prospects').select('*').eq('id', id).single();
-    if (error || !data) return;
-
-    idField.value = data.id;
-    document.getElementById('company_name').value = data.company_name || '';
-    document.getElementById('country').value = data.country || '';
-    document.getElementById('website').value = data.website || '';
-    document.getElementById('business_type').value = data.business_type || '';
-    document.getElementById('oman_relevance_score').value = data.oman_relevance_score ?? '';
-    document.getElementById('status').value = data.status || 'discovered';
-    document.getElementById('fleet_info').value = data.fleet_info || '';
-    document.getElementById('relevance_reason').value = data.relevance_reason || '';
-    document.getElementById('source_links').value = (data.source_links || []).join('\n');
-
-    formTitle.textContent = `Editing "${data.company_name}"`;
-    saveBtn.textContent = 'Save changes';
-    cancelBtn.style.display = 'inline-flex';
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-  }
-
-  async function deleteProspect(id, name) {
-    if (!confirm(`Delete "${name}"? This cannot be undone.`)) return;
-    const { error } = await supabase.from('prospects').delete().eq('id', id);
+  async function updateStatus(id, newStatus, companyName) {
+    const { error } = await supabase.from('prospects')
+      .update({ status: newStatus, updated_at: new Date().toISOString() })
+      .eq('id', id);
     if (error) { alert(error.message); return; }
-    await logActivity('Manual Entry', `Deleted prospect "${name}"`, 'prospects', id, {});
-    await loadProspects();
+    await logActivity('Manual Entry', `Moved "${companyName}" to ${STATUS_LABELS[newStatus]}`, 'prospects', id, { status: newStatus });
+    await loadBoard();
   }
 
-  async function loadProspects() {
-    const tbody = document.getElementById('prospects-tbody');
-    const { data, error } = await supabase
-      .from('prospects').select('*')
-      .order('discovered_at', { ascending: false });
+  async function loadBoard() {
+    const { data, error } = await supabase.from('prospects').select('*');
 
     if (error) {
-      tbody.innerHTML = `<tr class="empty-row"><td colspan="6">Error loading prospects: ${error.message}</td></tr>`;
+      board.innerHTML = `<div class="kanban-col"><h3>Error</h3><div class="kanban-empty">${error.message}</div></div>`;
       return;
     }
 
-    if (!data || data.length === 0) {
-      tbody.innerHTML = '<tr class="empty-row"><td colspan="6">No prospects yet — add the first one above.</td></tr>';
-      return;
-    }
+    const byStatus = {};
+    STATUS_ORDER.forEach(s => byStatus[s] = []);
+    (data || []).forEach(p => {
+      const s = p.status && byStatus[p.status] ? p.status : 'discovered';
+      byStatus[s].push(p);
+    });
 
-    tbody.innerHTML = data.map(p => `
-      <tr>
-        <td>${escapeHtml(p.company_name || '—')}</td>
-        <td>${escapeHtml(p.country || '—')}</td>
-        <td>${escapeHtml(p.business_type || '—')}</td>
-        <td>${p.oman_relevance_score ?? '—'}</td>
-        <td>${statusBadge(p.status)}</td>
-        <td>
-          <button class="btn btn-secondary btn-sm" data-edit="${p.id}">Edit</button>
-          <button class="btn-danger-text" data-delete="${p.id}" data-name="${escapeHtml(p.company_name || '')}">Delete</button>
-        </td>
-      </tr>
+    board.innerHTML = STATUS_ORDER.map(s => `
+      <div class="kanban-col">
+        <h3><span>${STATUS_LABELS[s]}</span><span>${byStatus[s].length}</span></h3>
+        <div data-col="${s}">
+          ${byStatus[s].length === 0
+            ? '<div class="kanban-empty">Empty</div>'
+            : byStatus[s].map(p => `
+              <div class="kanban-card">
+                <div class="co-name">${escapeHtml(p.company_name || 'Untitled')}</div>
+                <div class="co-meta">${escapeHtml(p.country || '—')} · Score ${p.oman_relevance_score ?? '—'}</div>
+                <select data-move="${p.id}" data-name="${escapeHtml(p.company_name || '')}">
+                  ${statusOptionsHtml(s)}
+                </select>
+              </div>
+            `).join('')
+          }
+        </div>
+      </div>
     `).join('');
 
-    tbody.querySelectorAll('[data-edit]').forEach(btn => {
-      btn.addEventListener('click', () => editProspect(btn.dataset.edit));
-    });
-    tbody.querySelectorAll('[data-delete]').forEach(btn => {
-      btn.addEventListener('click', () => deleteProspect(btn.dataset.delete, btn.dataset.name));
+    board.querySelectorAll('[data-move]').forEach(sel => {
+      sel.addEventListener('change', () => {
+        updateStatus(sel.dataset.move, sel.value, sel.dataset.name);
+      });
     });
   }
 
@@ -313,8 +147,8 @@
     }[m]));
   }
 
-  await loadProspects();
-  setInterval(loadProspects, 30000);
+  await loadBoard();
+  setInterval(loadBoard, 30000);
 </script>
 
 <script type="module" src="./js/navigation.js"></script>

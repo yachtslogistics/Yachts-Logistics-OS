@@ -1,14 +1,339 @@
-Yacht Logistics OS v7.4 — Draft Recipient Display
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dashboard — Yacht Logistics OS</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>⚓</text></svg>">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div class="app-shell">
+  <aside class="sidebar">
+    <div class="sidebar-brand">
+      <div class="mark">⚓</div>
+      <div><div class="name">Yacht Logistics</div><div class="sub">Operating System</div></div>
+    </div>
+    <ul class="nav-list" data-sidebar-nav>
+      <li class="nav-home"><a href="dashboard.html" data-nav-page="dashboard">Dashboard</a></li>
 
-Website-only usability update.
+      <li class="nav-section" data-nav-section="business">
+        <button class="nav-group-toggle" type="button" aria-expanded="false">
+          <span>Business Development</span><span class="nav-chevron" aria-hidden="true">›</span>
+        </button>
+        <ul class="nav-sublist">
+          <li><a href="prospects.html" data-nav-page="prospects">Prospects</a></li>
+          <li><a href="contacts.html" data-nav-page="contacts">Contacts</a></li>
+          <li><a href="partners.html" data-nav-page="partners">Partners</a></li>
+          <li><a href="pipeline.html" data-nav-page="pipeline">Pipeline</a></li>
+        </ul>
+      </li>
 
-What changed:
-- Draft cards now show the recipient business email directly under the company name.
-- Recipient email is clickable (mailto:).
-- Added a Copy email button.
-- If a contact has a name/role, it appears next to the email.
-- Works for both pending and handled drafts.
+      <li class="nav-section" data-nav-section="outreach">
+        <button class="nav-group-toggle" type="button" aria-expanded="false">
+          <span>Outreach</span><span class="nav-chevron" aria-hidden="true">›</span>
+        </button>
+        <ul class="nav-sublist">
+          <li><a href="drafts.html" data-nav-page="drafts">Drafts <span class="nav-count" data-nav-count="drafts" hidden></span></a></li>
+          <li><a href="conversations.html" data-nav-page="conversations">Conversations <span class="nav-count" data-nav-count="conversations" hidden></span></a></li>
+          <li><a href="followups.html" data-nav-page="followups">Follow-ups <span class="nav-count" data-nav-count="followups" hidden></span></a></li>
+        </ul>
+      </li>
 
-No Worker code, Cron triggers, Supabase schema, AI Router, or AI provider settings need to change for this update.
+      <li class="nav-section" data-nav-section="system">
+        <button class="nav-group-toggle" type="button" aria-expanded="false">
+          <span>AI &amp; System</span><span class="nav-chevron" aria-hidden="true">›</span>
+        </button>
+        <ul class="nav-sublist">
+          <li><a href="console.html" data-nav-page="console">Console</a></li>
+          <li><a href="usage.html" data-nav-page="usage">Usage</a></li>
+          <li><a href="activity.html" data-nav-page="activity">Activity Log</a></li>
+          <li><a href="settings.html" data-nav-page="settings">Settings</a></li>
+        </ul>
+      </li>
+    </ul>
+    <div class="sidebar-footer">
+      <div class="user-email" data-user-email>—</div>
+      <button class="btn-signout" data-signout>Sign out</button>
+    </div>
+  </aside>
 
-Deploy: upload/replace the website files in GitHub as usual.
+  <main class="main">
+    <div class="page-header">
+      <h1>Dashboard</h1>
+      <p><span class="live-dot"></span>Business-development overview. <span id="last-updated"></span></p>
+    </div>
+
+    <div class="stat-grid stat-grid-6">
+      <div class="stat-card"><div class="label">Prospects</div><div class="value" id="stat-prospects">—</div></div>
+      <div class="stat-card"><div class="label">Verified contacts</div><div class="value" id="stat-contacts">—</div></div>
+      <div class="stat-card"><div class="label">Partners</div><div class="value" id="stat-partners">—</div></div>
+      <div class="stat-card"><div class="label">Drafts to review</div><div class="value" id="stat-drafts">—</div></div>
+      <div class="stat-card"><div class="label">Reply drafts to review</div><div class="value" id="stat-replies">—</div></div>
+      <div class="stat-card"><div class="label">Follow-ups due</div><div class="value" id="stat-followups">—</div></div>
+    </div>
+
+    <div class="ai-status-panel">
+      <div class="ai-status-main">
+        <span class="ai-status-title">AI routing</span>
+        <span id="ai-route-state" class="worker-state">Loading…</span>
+        <span id="ai-route-meta" class="ai-status-meta"></span>
+      </div>
+      <a href="settings.html" class="btn btn-secondary btn-sm">Change provider</a>
+    </div>
+
+    <div class="panel groq-controls-panel">
+      <div class="panel-header">
+        <div>
+          <h2>Groq allocation</h2>
+          <div class="panel-subtext">Choose which Groq worker gets the shared request/token budget. Paused workers keep their Cron trigger but exit before making any Groq call.</div>
+        </div>
+        <div id="groq-mode-label" class="worker-state">Loading…</div>
+      </div>
+      <div class="groq-control-grid">
+        <div class="groq-worker-card">
+          <div>
+            <div class="mini-title">Prospect Finder</div>
+            <div class="mini-note">Finds new GCC, Iran, India/South Asia and international companies.</div>
+          </div>
+          <span id="prospect-control-state" class="worker-state">—</span>
+        </div>
+        <div class="groq-worker-card">
+          <div>
+            <div class="mini-title">Contact Finder</div>
+            <div class="mini-note">Uses the existing prospect backlog to find public business contacts.</div>
+          </div>
+          <span id="contact-control-state" class="worker-state">—</span>
+        </div>
+      </div>
+      <div class="groq-mode-actions">
+        <button type="button" class="btn btn-secondary btn-sm" data-groq-mode="balanced">Balanced · both ON</button>
+        <button type="button" class="btn btn-primary btn-sm" data-groq-mode="contacts">Prioritize contacts</button>
+        <button type="button" class="btn btn-secondary btn-sm" data-groq-mode="discovery">Discovery only</button>
+      </div>
+      <div class="field-note" id="groq-control-note">“Prioritize contacts” pauses Prospect Finder so the shared Groq budget is reserved for Contact Finder. Outreach Writer is separate and uses OpenAI/Gemini through the AI Router.</div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-header">
+        <div>
+          <h2>Worker status</h2>
+          <div class="panel-subtext">Latest recorded action for each active research worker.</div>
+        </div>
+        <a href="console.html" class="btn btn-secondary btn-sm">Open Console</a>
+      </div>
+      <div id="worker-status-grid" class="worker-grid">
+        <div class="mini-card"><div class="muted">Loading worker status…</div></div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-header">
+        <h2>Recent activity</h2>
+        <a href="activity.html" class="btn btn-secondary btn-sm">View full log</a>
+      </div>
+      <div id="recent-activity">
+        <div class="log-row"><span class="log-time">—</span><span>Loading…</span></div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<script type="module">
+  import { supabase, requireAuth, wireSignOut, timeAgo } from './js/supabaseClient.js';
+
+  await requireAuth();
+  wireSignOut();
+
+  const trackedWorkers = ['Prospect Finder', 'Relevance Scorer', 'Contact Finder', 'Outreach Writer', 'Conversation Manager'];
+
+  function escapeHtml(value) {
+    return String(value ?? '').replace(/[&<>"']/g, m => ({
+      '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
+    }[m]));
+  }
+
+  function workerState(action) {
+    const a = String(action || '').toLowerCase();
+    if (a.includes('skipped') || a.includes('aborted') || a.includes('budget')) return ['Protected / skipped', 'state-warn'];
+
+    const hardFailure =
+      a.includes('run failed') ||
+      a.includes('failed unexpectedly') ||
+      a.includes('scoring run failed') ||
+      a.includes('outreach writer failed') ||
+      a.includes('returned http 4') ||
+      a.includes('returned http 5') ||
+      a.includes('insert errors') && !/0 insert errors/.test(a);
+    if (hardFailure) return ['Issue', 'state-fail'];
+
+    const partialFailure = /failed(?: or unverified)?\s+([1-9]\d*)/.test(a) || /([1-9]\d*)\s+failure/.test(a);
+    if ((a.includes('complete') || a.includes('found') || a.includes('scored') || a.includes('inserted')) && partialFailure) {
+      return ['Working / partial', 'state-warn'];
+    }
+    if (a.includes('complete') || a.includes('found') || a.includes('scored') || a.includes('inserted')) return ['Working', 'state-ok'];
+    if (a.includes('error')) return ['Issue', 'state-fail'];
+    return ['Recorded', ''];
+  }
+
+  async function countTable(table, apply) {
+    try {
+      let q = supabase.from(table).select('*', { count: 'exact', head: true });
+      if (apply) q = apply(q);
+      const { count, error } = await q;
+      return error ? 0 : (count ?? 0);
+    } catch (_) { return 0; }
+  }
+
+
+  function renderGroqControls(prospectOn, contactOn) {
+    const prospect = document.getElementById('prospect-control-state');
+    const contact = document.getElementById('contact-control-state');
+    const label = document.getElementById('groq-mode-label');
+    prospect.textContent = prospectOn ? 'ON' : 'PAUSED';
+    prospect.className = 'worker-state ' + (prospectOn ? 'state-ok' : 'state-warn');
+    contact.textContent = contactOn ? 'ON' : 'PAUSED';
+    contact.className = 'worker-state ' + (contactOn ? 'state-ok' : 'state-warn');
+    label.textContent = prospectOn && contactOn ? 'Balanced' : (!prospectOn && contactOn ? 'Contacts prioritized' : (prospectOn && !contactOn ? 'Discovery only' : 'Both paused'));
+    label.className = 'worker-state ' + ((prospectOn || contactOn) ? 'state-ok' : 'state-warn');
+
+    document.querySelectorAll('[data-groq-mode]').forEach(btn => {
+      const mode = btn.dataset.groqMode;
+      const active = (mode === 'balanced' && prospectOn && contactOn) ||
+        (mode === 'contacts' && !prospectOn && contactOn) ||
+        (mode === 'discovery' && prospectOn && !contactOn);
+      btn.classList.toggle('groq-mode-active', active);
+    });
+  }
+
+  async function setGroqMode(mode, button) {
+    const profileId = window.__yloProfileId;
+    if (!profileId) {
+      document.getElementById('groq-control-note').textContent = 'Could not find the company profile row. Open Settings and save once, then try again.';
+      return;
+    }
+    const current = window.__yloSendingLimits && typeof window.__yloSendingLimits === 'object' ? window.__yloSendingLimits : {};
+    let prospectOn = true, contactOn = true;
+    if (mode === 'contacts') prospectOn = false;
+    if (mode === 'discovery') contactOn = false;
+
+    const next = {
+      ...current,
+      groq_prospect_finder_enabled: prospectOn,
+      groq_contact_finder_enabled: contactOn
+    };
+    const buttons = [...document.querySelectorAll('[data-groq-mode]')];
+    buttons.forEach(b => b.disabled = true);
+    const original = button.textContent;
+    button.textContent = 'Saving…';
+    const { error } = await supabase.from('company_profile').update({ sending_limits: next }).eq('id', profileId);
+    buttons.forEach(b => b.disabled = false);
+    button.textContent = original;
+    const note = document.getElementById('groq-control-note');
+    if (error) {
+      note.textContent = 'Could not change Groq allocation: ' + error.message;
+      return;
+    }
+    window.__yloSendingLimits = next;
+    renderGroqControls(prospectOn, contactOn);
+    note.textContent = mode === 'contacts'
+      ? 'Contact priority active. Prospect Finder will skip its Cron runs before calling Groq; Contact Finder keeps the shared Groq budget.'
+      : mode === 'discovery'
+        ? 'Discovery-only mode active. Contact Finder is paused; Prospect Finder keeps researching new companies.'
+        : 'Balanced mode active. Prospect Finder and Contact Finder can both use the shared Groq budget.';
+  }
+
+  document.querySelectorAll('[data-groq-mode]').forEach(btn => {
+    btn.addEventListener('click', () => setGroqMode(btn.dataset.groqMode, btn));
+  });
+
+  async function loadDashboard() {
+    const today = new Date().toISOString().slice(0, 10);
+
+    const omanNow = new Date(Date.now() + 4 * 60 * 60 * 1000);
+    const omanDayStart = new Date(Date.UTC(omanNow.getUTCFullYear(), omanNow.getUTCMonth(), omanNow.getUTCDate(), 0, 0, 0) - 4 * 60 * 60 * 1000).toISOString();
+    const omanMonthStart = new Date(Date.UTC(omanNow.getUTCFullYear(), omanNow.getUTCMonth(), 1, 0, 0, 0) - 4 * 60 * 60 * 1000).toISOString();
+
+    const [prospects, contacts, partners, drafts, replies, followups, logsResult, profileResult, usageResult] = await Promise.all([
+      countTable('prospects'),
+      countTable('contacts', q => q.eq('verified', true)),
+      countTable('partners'),
+      countTable('email_drafts', q => q.eq('status', 'draft')),
+      countTable('outreach_messages', q => q.eq('message_type', 'ai_reply_draft').eq('status', 'draft')),
+      countTable('outreach_conversations', q => q.eq('status', 'active').lte('next_follow_up_at', new Date().toISOString())),
+      supabase.from('activity_log').select('*').order('created_at', { ascending: false }).limit(120),
+      supabase.from('company_profile').select('id,sending_limits').limit(1),
+      supabase.from('api_usage').select('provider,created_at,estimated_cost_usd,billed_cost_usd,status').gte('created_at', omanMonthStart).order('created_at', { ascending: false }).limit(1000)
+    ]);
+
+    document.getElementById('stat-prospects').textContent = prospects;
+    document.getElementById('stat-contacts').textContent = contacts;
+    document.getElementById('stat-partners').textContent = partners;
+    document.getElementById('stat-drafts').textContent = drafts;
+    document.getElementById('stat-replies').textContent = replies;
+    document.getElementById('stat-followups').textContent = followups;
+
+    const profileRow = profileResult.data?.[0] || null;
+    const limits = profileRow?.sending_limits || {};
+    window.__yloProfileId = profileRow?.id || null;
+    window.__yloSendingLimits = limits;
+    const prospectOn = limits.groq_prospect_finder_enabled !== false;
+    const contactOn = limits.groq_contact_finder_enabled !== false;
+    renderGroqControls(prospectOn, contactOn);
+    const openaiOn = limits.ai_openai_enabled !== false;
+    const monthlyBudget = Math.min(4.5, Number(limits.openai_monthly_budget_usd ?? 4.5));
+    const geminiLimit = Math.min(24, Math.max(1, parseInt(limits.gemini_daily_request_limit ?? 20, 10)));
+    const usageRows = usageResult.data || [];
+    const openaiSpend = usageRows
+      .filter(r => r.provider === 'openai' && r.status === 'completed')
+      .reduce((sum, r) => sum + Number(r.billed_cost_usd ?? r.estimated_cost_usd ?? 0), 0);
+    const geminiToday = usageRows.filter(r => r.provider === 'gemini' && r.created_at >= omanDayStart && (r.status === 'completed' || r.status === 'failed')).length;
+    const routeState = document.getElementById('ai-route-state');
+    routeState.textContent = openaiOn ? 'OpenAI Luna preferred' : 'Gemini active';
+    routeState.className = 'worker-state ' + (openaiOn ? 'state-ok' : 'state-warn');
+    document.getElementById('ai-route-meta').textContent = `OpenAI $${openaiSpend.toFixed(3)} / $${monthlyBudget.toFixed(2)} · Gemini ${geminiToday}/${geminiLimit} today`;
+
+    const logs = logsResult.data || [];
+    const recentBox = document.getElementById('recent-activity');
+    if (logs.length === 0) {
+      recentBox.innerHTML = '<div class="log-row"><span>Nothing logged yet.</span></div>';
+    } else {
+      recentBox.innerHTML = logs.slice(0, 7).map(l => `
+        <div class="log-row">
+          <span class="log-time">${escapeHtml(timeAgo(l.created_at))}</span>
+          <span class="log-worker">${escapeHtml(l.worker_name || '—')}</span>
+          <span>${escapeHtml(l.action || '')}</span>
+        </div>
+      `).join('');
+    }
+
+    const statusBox = document.getElementById('worker-status-grid');
+    statusBox.innerHTML = trackedWorkers.map(worker => {
+      const last = logs.find(l => l.worker_name === worker);
+      if (!last) {
+        return `<div class="mini-card">
+          <div class="mini-title">${escapeHtml(worker)}</div>
+          <div class="worker-state muted">No recent log</div>
+          <div class="mini-note">Waiting for the next recorded run</div>
+        </div>`;
+      }
+      const [label, cls] = workerState(last.action);
+      return `<div class="mini-card">
+        <div class="mini-title">${escapeHtml(worker)}</div>
+        <div class="worker-state ${cls}">${escapeHtml(label)}</div>
+        <div class="mini-note">${escapeHtml(timeAgo(last.created_at))}</div>
+        <div class="worker-action">${escapeHtml(last.action || '')}</div>
+      </div>`;
+    }).join('');
+
+    document.getElementById('last-updated').textContent = 'Updated ' + timeAgo(new Date().toISOString());
+  }
+
+  await loadDashboard();
+  setInterval(loadDashboard, 20000);
+</script>
+<script type="module" src="./js/navigation.js"></script>
+</body>
+</html>
