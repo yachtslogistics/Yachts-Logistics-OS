@@ -1154,3 +1154,35 @@ tr:last-child td { border-bottom: none; }
 }
 
 .conversation-highlight { outline: 1px solid var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+
+
+/* v7.5 Groq worker allocation controls */
+.groq-controls-panel { margin-top: 0; }
+.groq-control-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 14px;
+}
+.groq-worker-card {
+  border: 1px solid var(--panel-border);
+  border-radius: 10px;
+  padding: 14px 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  background: rgba(6, 16, 29, .28);
+}
+.groq-mode-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 14px;
+}
+.groq-mode-active {
+  box-shadow: 0 0 0 1px var(--gold, #e0ad00) inset;
+}
+@media (max-width: 760px) {
+  .groq-control-grid { grid-template-columns: 1fr; }
+}

@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Conversations — Yacht Logistics OS</title>
+<title>Dashboard — Yacht Logistics OS</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>⚓</text></svg>">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -62,245 +62,277 @@
 
   <main class="main">
     <div class="page-header">
-      <h1>Conversations</h1>
-      <p>Paste real replies here. AI prepares the next response for your review — nothing sends automatically.</p>
+      <h1>Dashboard</h1>
+      <p><span class="live-dot"></span>Business-development overview. <span id="last-updated"></span></p>
     </div>
 
-    <div class="panel conversation-help">
-      <div class="panel-header"><h2>How this works</h2></div>
-      <div class="panel-subtext">After you approve an outreach draft and send it manually, click <strong>Mark as sent</strong> on Drafts. That company appears here. Paste their reply whenever one arrives. The Conversation Manager will create a suggested reply on its next run.</div>
+    <div class="stat-grid stat-grid-6">
+      <div class="stat-card"><div class="label">Prospects</div><div class="value" id="stat-prospects">—</div></div>
+      <div class="stat-card"><div class="label">Verified contacts</div><div class="value" id="stat-contacts">—</div></div>
+      <div class="stat-card"><div class="label">Partners</div><div class="value" id="stat-partners">—</div></div>
+      <div class="stat-card"><div class="label">Drafts to review</div><div class="value" id="stat-drafts">—</div></div>
+      <div class="stat-card"><div class="label">Reply drafts to review</div><div class="value" id="stat-replies">—</div></div>
+      <div class="stat-card"><div class="label">Follow-ups due</div><div class="value" id="stat-followups">—</div></div>
+    </div>
+
+    <div class="ai-status-panel">
+      <div class="ai-status-main">
+        <span class="ai-status-title">AI routing</span>
+        <span id="ai-route-state" class="worker-state">Loading…</span>
+        <span id="ai-route-meta" class="ai-status-meta"></span>
+      </div>
+      <a href="settings.html" class="btn btn-secondary btn-sm">Change provider</a>
+    </div>
+
+    <div class="panel groq-controls-panel">
+      <div class="panel-header">
+        <div>
+          <h2>Groq allocation</h2>
+          <div class="panel-subtext">Choose which Groq worker gets the shared request/token budget. Paused workers keep their Cron trigger but exit before making any Groq call.</div>
+        </div>
+        <div id="groq-mode-label" class="worker-state">Loading…</div>
+      </div>
+      <div class="groq-control-grid">
+        <div class="groq-worker-card">
+          <div>
+            <div class="mini-title">Prospect Finder</div>
+            <div class="mini-note">Finds new GCC, Iran, India/South Asia and international companies.</div>
+          </div>
+          <span id="prospect-control-state" class="worker-state">—</span>
+        </div>
+        <div class="groq-worker-card">
+          <div>
+            <div class="mini-title">Contact Finder</div>
+            <div class="mini-note">Uses the existing prospect backlog to find public business contacts.</div>
+          </div>
+          <span id="contact-control-state" class="worker-state">—</span>
+        </div>
+      </div>
+      <div class="groq-mode-actions">
+        <button type="button" class="btn btn-secondary btn-sm" data-groq-mode="balanced">Balanced · both ON</button>
+        <button type="button" class="btn btn-primary btn-sm" data-groq-mode="contacts">Prioritize contacts</button>
+        <button type="button" class="btn btn-secondary btn-sm" data-groq-mode="discovery">Discovery only</button>
+      </div>
+      <div class="field-note" id="groq-control-note">“Prioritize contacts” pauses Prospect Finder so the shared Groq budget is reserved for Contact Finder. Outreach Writer is separate and uses OpenAI/Gemini through the AI Router.</div>
     </div>
 
     <div class="panel">
-      <div class="panel-header"><h2>Active conversations</h2><span id="active-count" class="badge">—</span></div>
-      <div id="active-list"><div class="log-row">Loading…</div></div>
+      <div class="panel-header">
+        <div>
+          <h2>Worker status</h2>
+          <div class="panel-subtext">Latest recorded action for each active research worker.</div>
+        </div>
+        <a href="console.html" class="btn btn-secondary btn-sm">Open Console</a>
+      </div>
+      <div id="worker-status-grid" class="worker-grid">
+        <div class="mini-card"><div class="muted">Loading worker status…</div></div>
+      </div>
     </div>
 
     <div class="panel">
-      <div class="panel-header"><h2>Closed</h2><span id="closed-count" class="badge">—</span></div>
-      <div id="closed-list"><div class="log-row">Loading…</div></div>
+      <div class="panel-header">
+        <h2>Recent activity</h2>
+        <a href="activity.html" class="btn btn-secondary btn-sm">View full log</a>
+      </div>
+      <div id="recent-activity">
+        <div class="log-row"><span class="log-time">—</span><span>Loading…</span></div>
+      </div>
     </div>
   </main>
 </div>
 
 <script type="module">
-  import { supabase, requireAuth, wireSignOut, timeAgo, logActivity } from './js/supabaseClient.js';
+  import { supabase, requireAuth, wireSignOut, timeAgo } from './js/supabaseClient.js';
 
   await requireAuth();
   wireSignOut();
 
-  const FOLLOW_UP_DELAYS_DAYS = [7, 14, 14];
+  const trackedWorkers = ['Prospect Finder', 'Relevance Scorer', 'Contact Finder', 'Outreach Writer', 'Conversation Manager'];
 
-  function esc(v) {
-    return String(v ?? '').replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
-  }
-  function isoPlusDays(days) { return new Date(Date.now() + days * 86400000).toISOString(); }
-  function displayStatus(status) { return String(status || '').replaceAll('_',' ').replace(/\b\w/g, c => c.toUpperCase()); }
-
-  function messageHtml(m) {
-    const inbound = m.direction === 'inbound';
-    const cls = inbound ? 'conversation-message inbound' : 'conversation-message outbound';
-    const title = inbound ? 'Their reply' : (m.message_type === 'ai_follow_up_draft' ? 'Follow-up draft' : m.message_type === 'ai_reply_draft' ? 'Suggested reply' : 'Your message');
-    const editable = !inbound && (m.status === 'draft' || m.status === 'approved') && (m.message_type === 'ai_reply_draft' || m.message_type === 'ai_follow_up_draft');
-    return `
-      <div class="${cls}" data-message-id="${esc(m.id)}" data-message-type="${esc(m.message_type)}">
-        <div class="conversation-message-head">
-          <strong>${esc(title)}</strong>
-          <span>${esc(timeAgo(m.sent_at || m.created_at))}</span>
-        </div>
-        <label>Subject</label>
-        <input data-msg-field="subject" value="${esc(m.subject || '')}" ${editable ? '' : 'disabled'}>
-        <label>Message</label>
-        <textarea data-msg-field="body" ${editable ? '' : 'disabled'}>${esc(m.body || '')}</textarea>
-        ${editable ? `
-          <div class="form-actions">
-            <button class="btn btn-primary btn-sm" data-msg-action="save">Save edits</button>
-            ${m.status !== 'approved' ? '<button class="btn btn-secondary btn-sm" data-msg-action="approve">Approve</button>' : ''}
-            <button class="btn btn-secondary btn-sm" data-msg-action="sent">Mark as sent</button>
-          </div>
-        ` : ''}
-      </div>`;
+  function escapeHtml(value) {
+    return String(value ?? '').replace(/[&<>"']/g, m => ({
+      '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
+    }[m]));
   }
 
-  function conversationCard(c, messages) {
-    const company = c.prospects?.company_name || 'Unknown company';
-    const initial = messages.find(m => m.message_type === 'initial_sent');
-    const visible = messages.filter(m => m.message_type !== 'initial_sent');
-    const active = c.status === 'active';
-    const due = c.next_follow_up_at ? timeAgo(c.next_follow_up_at) : 'Not scheduled';
-    return `
-      <div class="panel conversation-card" data-conversation-id="${esc(c.id)}" data-prospect-id="${esc(c.prospect_id)}">
-        <div class="panel-header conversation-title-row">
-          <div>
-            <h2 style="font-size:15px;">${esc(company)}</h2>
-            <div class="panel-subtext">Started ${esc(timeAgo(c.started_at))} · Follow-ups sent: ${Number(c.follow_up_count || 0)}</div>
-          </div>
-          <span class="badge ${active ? 'badge-approved' : ''}">${esc(displayStatus(c.status))}</span>
-        </div>
+  function workerState(action) {
+    const a = String(action || '').toLowerCase();
+    if (a.includes('skipped') || a.includes('aborted') || a.includes('budget')) return ['Protected / skipped', 'state-warn'];
 
-        ${initial ? `
-          <div class="conversation-summary">
-            <strong>Sent subject:</strong> ${esc(initial.subject || '—')}
-            <details>
-              <summary>View the email you sent</summary>
-              <div class="conversation-sent-copy">${esc(initial.body || '').replace(/\n/g,'<br>')}</div>
-            </details>
-          </div>
-        ` : ''}
+    const hardFailure =
+      a.includes('run failed') ||
+      a.includes('failed unexpectedly') ||
+      a.includes('scoring run failed') ||
+      a.includes('outreach writer failed') ||
+      a.includes('returned http 4') ||
+      a.includes('returned http 5') ||
+      a.includes('insert errors') && !/0 insert errors/.test(a);
+    if (hardFailure) return ['Issue', 'state-fail'];
 
-        ${visible.length ? `<div class="conversation-thread">${visible.map(messageHtml).join('')}</div>` : '<div class="log-row">No replies yet.</div>'}
-
-        ${active ? `
-          <div class="reply-paste-box">
-            <h3>Paste a new reply</h3>
-            <label>Their subject</label>
-            <input data-reply-subject placeholder="Re: ${esc(initial?.subject || '')}">
-            <label>Their reply</label>
-            <textarea data-reply-body placeholder="Paste the message they sent you here..."></textarea>
-            <div class="form-actions">
-              <button class="btn btn-primary btn-sm" data-action="save-reply">Save reply for AI</button>
-              <button class="btn-danger-text" data-action="close">Close conversation</button>
-            </div>
-            <div class="field-note">The reply stays pending until Conversation Manager runs. Empty scheduled checks use no AI request.</div>
-          </div>
-          <div class="conversation-next">Next follow-up: ${esc(due)}</div>
-        ` : ''}
-      </div>`;
+    const partialFailure = /failed(?: or unverified)?\s+([1-9]\d*)/.test(a) || /([1-9]\d*)\s+failure/.test(a);
+    if ((a.includes('complete') || a.includes('found') || a.includes('scored') || a.includes('inserted')) && partialFailure) {
+      return ['Working / partial', 'state-warn'];
+    }
+    if (a.includes('complete') || a.includes('found') || a.includes('scored') || a.includes('inserted')) return ['Working', 'state-ok'];
+    if (a.includes('error')) return ['Issue', 'state-fail'];
+    return ['Recorded', ''];
   }
 
-  async function load() {
-    const { data: convs, error } = await supabase
-      .from('outreach_conversations')
-      .select('*, prospects(company_name,country,business_type)')
-      .order('last_activity_at', { ascending: false });
-
-    if (error) {
-      document.getElementById('active-list').innerHTML = `<div class="log-row">Conversations are not ready yet: ${esc(error.message)}. Run sql/outreach-conversations.sql once in Supabase.</div>`;
-      document.getElementById('closed-list').innerHTML = '';
-      return;
-    }
-
-    const ids = (convs || []).map(c => c.id);
-    let messages = [];
-    if (ids.length) {
-      const r = await supabase.from('outreach_messages').select('*').in('conversation_id', ids).order('created_at', { ascending: true });
-      if (!r.error) messages = r.data || [];
-    }
-    const byConv = new Map();
-    for (const m of messages) {
-      if (!byConv.has(m.conversation_id)) byConv.set(m.conversation_id, []);
-      byConv.get(m.conversation_id).push(m);
-    }
-
-    const active = (convs || []).filter(c => c.status === 'active');
-    const closed = (convs || []).filter(c => c.status !== 'active');
-    document.getElementById('active-count').textContent = active.length;
-    document.getElementById('closed-count').textContent = closed.length;
-    document.getElementById('active-list').innerHTML = active.length ? active.map(c => conversationCard(c, byConv.get(c.id) || [])).join('') : '<div class="log-row">No active conversations yet. Mark an approved draft as sent to start one.</div>';
-    document.getElementById('closed-list').innerHTML = closed.length ? closed.map(c => conversationCard(c, byConv.get(c.id) || [])).join('') : '<div class="log-row">No closed conversations.</div>';
-    wireActions();
-
-    const requestedId = new URLSearchParams(location.search).get('id');
-    if (requestedId) {
-      requestAnimationFrame(() => {
-        const target = document.querySelector(`[data-conversation-id="${CSS.escape(requestedId)}"]`);
-        if (target) {
-          target.scrollIntoView({ behavior: 'smooth', block: 'start' });
-          target.classList.add('conversation-highlight');
-          setTimeout(() => target.classList.remove('conversation-highlight'), 1800);
-        }
-      });
-    }
+  async function countTable(table, apply) {
+    try {
+      let q = supabase.from(table).select('*', { count: 'exact', head: true });
+      if (apply) q = apply(q);
+      const { count, error } = await q;
+      return error ? 0 : (count ?? 0);
+    } catch (_) { return 0; }
   }
 
-  function wireActions() {
-    document.querySelectorAll('[data-conversation-id]').forEach(card => {
-      const conversationId = card.dataset.conversationId;
-      const prospectId = card.dataset.prospectId;
-      const saveReply = card.querySelector('[data-action="save-reply"]');
-      const closeBtn = card.querySelector('[data-action="close"]');
 
-      if (saveReply) saveReply.addEventListener('click', async () => {
-        const subject = card.querySelector('[data-reply-subject]').value.trim();
-        const body = card.querySelector('[data-reply-body]').value.trim();
-        if (!body) return alert('Paste their reply first.');
-        saveReply.disabled = true;
-        const now = new Date().toISOString();
-        const { error } = await supabase.from('outreach_messages').insert({
-          conversation_id: conversationId,
-          prospect_id: prospectId,
-          direction: 'inbound',
-          message_type: 'reply_received',
-          subject: subject || null,
-          body,
-          status: 'saved',
-          ai_status: 'pending'
-        });
-        if (error) { saveReply.disabled = false; return alert(error.message); }
-        await supabase.from('outreach_conversations').update({
-          last_activity_at: now,
-          last_inbound_at: now,
-          next_follow_up_at: null,
-          follow_up_count: 0
-        }).eq('id', conversationId);
-        await logActivity('Manual Conversation', 'Reply pasted — waiting for AI suggested response.', 'outreach_messages', conversationId, { prospect_id: prospectId });
-        await load();
-      });
+  function renderGroqControls(prospectOn, contactOn) {
+    const prospect = document.getElementById('prospect-control-state');
+    const contact = document.getElementById('contact-control-state');
+    const label = document.getElementById('groq-mode-label');
+    prospect.textContent = prospectOn ? 'ON' : 'PAUSED';
+    prospect.className = 'worker-state ' + (prospectOn ? 'state-ok' : 'state-warn');
+    contact.textContent = contactOn ? 'ON' : 'PAUSED';
+    contact.className = 'worker-state ' + (contactOn ? 'state-ok' : 'state-warn');
+    label.textContent = prospectOn && contactOn ? 'Balanced' : (!prospectOn && contactOn ? 'Contacts prioritized' : (prospectOn && !contactOn ? 'Discovery only' : 'Both paused'));
+    label.className = 'worker-state ' + ((prospectOn || contactOn) ? 'state-ok' : 'state-warn');
 
-      if (closeBtn) closeBtn.addEventListener('click', async () => {
-        if (!confirm('Close this conversation?')) return;
-        const now = new Date().toISOString();
-        const { error } = await supabase.from('outreach_conversations').update({ status:'closed', closed_at:now, close_reason:'manual', last_activity_at:now }).eq('id', conversationId);
-        if (error) return alert(error.message);
-        await logActivity('Manual Conversation', 'Conversation closed manually.', 'outreach_conversations', conversationId, { prospect_id: prospectId });
-        await load();
-      });
-
-      card.querySelectorAll('[data-message-id]').forEach(msg => {
-        const id = msg.dataset.messageId;
-        const type = msg.dataset.messageType;
-        const save = msg.querySelector('[data-msg-action="save"]');
-        const approve = msg.querySelector('[data-msg-action="approve"]');
-        const sent = msg.querySelector('[data-msg-action="sent"]');
-        const values = () => ({ subject: msg.querySelector('[data-msg-field="subject"]')?.value.trim() || null, body: msg.querySelector('[data-msg-field="body"]')?.value.trim() || '' });
-
-        if (save) save.addEventListener('click', async () => {
-          const v = values(); if (!v.body) return alert('Message body cannot be empty.');
-          const { error } = await supabase.from('outreach_messages').update(v).eq('id', id);
-          if (error) return alert(error.message); await load();
-        });
-        if (approve) approve.addEventListener('click', async () => {
-          const v = values(); if (!v.body) return alert('Message body cannot be empty.');
-          const { error } = await supabase.from('outreach_messages').update({ ...v, status:'approved' }).eq('id', id);
-          if (error) return alert(error.message); await load();
-        });
-        if (sent) sent.addEventListener('click', async () => {
-          const v = values(); if (!v.body) return alert('Message body cannot be empty.');
-          const now = new Date().toISOString();
-          const { error } = await supabase.from('outreach_messages').update({ ...v, status:'sent', sent_at:now }).eq('id', id);
-          if (error) return alert(error.message);
-
-          const convRow = await supabase.from('outreach_conversations').select('follow_up_count').eq('id', conversationId).single();
-          let count = Number(convRow.data?.follow_up_count || 0);
-          if (type === 'ai_follow_up_draft') count += 1;
-          const delay = FOLLOW_UP_DELAYS_DAYS[Math.min(count, FOLLOW_UP_DELAYS_DAYS.length - 1)];
-          const next = count >= 3 ? null : isoPlusDays(delay);
-          await supabase.from('outreach_conversations').update({
-            last_activity_at: now,
-            last_outbound_at: now,
-            follow_up_count: count,
-            next_follow_up_at: next
-          }).eq('id', conversationId);
-          await supabase.from('prospects').update({ status:'contacted', updated_at:now }).eq('id', prospectId);
-          await logActivity('Manual Conversation', 'Approved response marked as sent.', 'outreach_messages', id, { prospect_id: prospectId, message_type:type });
-          await load();
-        });
-      });
+    document.querySelectorAll('[data-groq-mode]').forEach(btn => {
+      const mode = btn.dataset.groqMode;
+      const active = (mode === 'balanced' && prospectOn && contactOn) ||
+        (mode === 'contacts' && !prospectOn && contactOn) ||
+        (mode === 'discovery' && prospectOn && !contactOn);
+      btn.classList.toggle('groq-mode-active', active);
     });
   }
 
-  await load();
-  setInterval(load, 30000);
+  async function setGroqMode(mode, button) {
+    const profileId = window.__yloProfileId;
+    if (!profileId) {
+      document.getElementById('groq-control-note').textContent = 'Could not find the company profile row. Open Settings and save once, then try again.';
+      return;
+    }
+    const current = window.__yloSendingLimits && typeof window.__yloSendingLimits === 'object' ? window.__yloSendingLimits : {};
+    let prospectOn = true, contactOn = true;
+    if (mode === 'contacts') prospectOn = false;
+    if (mode === 'discovery') contactOn = false;
+
+    const next = {
+      ...current,
+      groq_prospect_finder_enabled: prospectOn,
+      groq_contact_finder_enabled: contactOn
+    };
+    const buttons = [...document.querySelectorAll('[data-groq-mode]')];
+    buttons.forEach(b => b.disabled = true);
+    const original = button.textContent;
+    button.textContent = 'Saving…';
+    const { error } = await supabase.from('company_profile').update({ sending_limits: next }).eq('id', profileId);
+    buttons.forEach(b => b.disabled = false);
+    button.textContent = original;
+    const note = document.getElementById('groq-control-note');
+    if (error) {
+      note.textContent = 'Could not change Groq allocation: ' + error.message;
+      return;
+    }
+    window.__yloSendingLimits = next;
+    renderGroqControls(prospectOn, contactOn);
+    note.textContent = mode === 'contacts'
+      ? 'Contact priority active. Prospect Finder will skip its Cron runs before calling Groq; Contact Finder keeps the shared Groq budget.'
+      : mode === 'discovery'
+        ? 'Discovery-only mode active. Contact Finder is paused; Prospect Finder keeps researching new companies.'
+        : 'Balanced mode active. Prospect Finder and Contact Finder can both use the shared Groq budget.';
+  }
+
+  document.querySelectorAll('[data-groq-mode]').forEach(btn => {
+    btn.addEventListener('click', () => setGroqMode(btn.dataset.groqMode, btn));
+  });
+
+  async function loadDashboard() {
+    const today = new Date().toISOString().slice(0, 10);
+
+    const omanNow = new Date(Date.now() + 4 * 60 * 60 * 1000);
+    const omanDayStart = new Date(Date.UTC(omanNow.getUTCFullYear(), omanNow.getUTCMonth(), omanNow.getUTCDate(), 0, 0, 0) - 4 * 60 * 60 * 1000).toISOString();
+    const omanMonthStart = new Date(Date.UTC(omanNow.getUTCFullYear(), omanNow.getUTCMonth(), 1, 0, 0, 0) - 4 * 60 * 60 * 1000).toISOString();
+
+    const [prospects, contacts, partners, drafts, replies, followups, logsResult, profileResult, usageResult] = await Promise.all([
+      countTable('prospects'),
+      countTable('contacts', q => q.eq('verified', true)),
+      countTable('partners'),
+      countTable('email_drafts', q => q.eq('status', 'draft')),
+      countTable('outreach_messages', q => q.eq('message_type', 'ai_reply_draft').eq('status', 'draft')),
+      countTable('outreach_conversations', q => q.eq('status', 'active').lte('next_follow_up_at', new Date().toISOString())),
+      supabase.from('activity_log').select('*').order('created_at', { ascending: false }).limit(120),
+      supabase.from('company_profile').select('id,sending_limits').limit(1),
+      supabase.from('api_usage').select('provider,created_at,estimated_cost_usd,billed_cost_usd,status').gte('created_at', omanMonthStart).order('created_at', { ascending: false }).limit(1000)
+    ]);
+
+    document.getElementById('stat-prospects').textContent = prospects;
+    document.getElementById('stat-contacts').textContent = contacts;
+    document.getElementById('stat-partners').textContent = partners;
+    document.getElementById('stat-drafts').textContent = drafts;
+    document.getElementById('stat-replies').textContent = replies;
+    document.getElementById('stat-followups').textContent = followups;
+
+    const profileRow = profileResult.data?.[0] || null;
+    const limits = profileRow?.sending_limits || {};
+    window.__yloProfileId = profileRow?.id || null;
+    window.__yloSendingLimits = limits;
+    const prospectOn = limits.groq_prospect_finder_enabled !== false;
+    const contactOn = limits.groq_contact_finder_enabled !== false;
+    renderGroqControls(prospectOn, contactOn);
+    const openaiOn = limits.ai_openai_enabled !== false;
+    const monthlyBudget = Math.min(4.5, Number(limits.openai_monthly_budget_usd ?? 4.5));
+    const geminiLimit = Math.min(24, Math.max(1, parseInt(limits.gemini_daily_request_limit ?? 20, 10)));
+    const usageRows = usageResult.data || [];
+    const openaiSpend = usageRows
+      .filter(r => r.provider === 'openai' && r.status === 'completed')
+      .reduce((sum, r) => sum + Number(r.billed_cost_usd ?? r.estimated_cost_usd ?? 0), 0);
+    const geminiToday = usageRows.filter(r => r.provider === 'gemini' && r.created_at >= omanDayStart && (r.status === 'completed' || r.status === 'failed')).length;
+    const routeState = document.getElementById('ai-route-state');
+    routeState.textContent = openaiOn ? 'OpenAI Luna preferred' : 'Gemini active';
+    routeState.className = 'worker-state ' + (openaiOn ? 'state-ok' : 'state-warn');
+    document.getElementById('ai-route-meta').textContent = `OpenAI $${openaiSpend.toFixed(3)} / $${monthlyBudget.toFixed(2)} · Gemini ${geminiToday}/${geminiLimit} today`;
+
+    const logs = logsResult.data || [];
+    const recentBox = document.getElementById('recent-activity');
+    if (logs.length === 0) {
+      recentBox.innerHTML = '<div class="log-row"><span>Nothing logged yet.</span></div>';
+    } else {
+      recentBox.innerHTML = logs.slice(0, 7).map(l => `
+        <div class="log-row">
+          <span class="log-time">${escapeHtml(timeAgo(l.created_at))}</span>
+          <span class="log-worker">${escapeHtml(l.worker_name || '—')}</span>
+          <span>${escapeHtml(l.action || '')}</span>
+        </div>
+      `).join('');
+    }
+
+    const statusBox = document.getElementById('worker-status-grid');
+    statusBox.innerHTML = trackedWorkers.map(worker => {
+      const last = logs.find(l => l.worker_name === worker);
+      if (!last) {
+        return `<div class="mini-card">
+          <div class="mini-title">${escapeHtml(worker)}</div>
+          <div class="worker-state muted">No recent log</div>
+          <div class="mini-note">Waiting for the next recorded run</div>
+        </div>`;
+      }
+      const [label, cls] = workerState(last.action);
+      return `<div class="mini-card">
+        <div class="mini-title">${escapeHtml(worker)}</div>
+        <div class="worker-state ${cls}">${escapeHtml(label)}</div>
+        <div class="mini-note">${escapeHtml(timeAgo(last.created_at))}</div>
+        <div class="worker-action">${escapeHtml(last.action || '')}</div>
+      </div>`;
+    }).join('');
+
+    document.getElementById('last-updated').textContent = 'Updated ' + timeAgo(new Date().toISOString());
+  }
+
+  await loadDashboard();
+  setInterval(loadDashboard, 20000);
 </script>
 <script type="module" src="./js/navigation.js"></script>
 </body>

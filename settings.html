@@ -3,22 +3,18 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Prospects — Yacht Logistics OS</title>
+<title>Settings — Yacht Logistics OS</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>⚓</text></svg>">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
-
 <div class="app-shell">
   <aside class="sidebar">
     <div class="sidebar-brand">
       <div class="mark">⚓</div>
-      <div>
-        <div class="name">Yacht Logistics</div>
-        <div class="sub">Operating System</div>
-      </div>
+      <div><div class="name">Yacht Logistics</div><div class="sub">Operating System</div></div>
     </div>
     <ul class="nav-list" data-sidebar-nav>
       <li class="nav-home"><a href="dashboard.html" data-nav-page="dashboard">Dashboard</a></li>
@@ -66,257 +62,259 @@
 
   <main class="main">
     <div class="page-header">
-      <h1>Prospects</h1>
-      <p>Every company goes in here manually for now — AI research joins in Milestone 2.</p>
+      <h1>Settings</h1>
+      <p>The company brain used by present and future AI workers. Keep these facts accurate.</p>
     </div>
 
     <div class="panel">
-      <div class="panel-header">
-        <h2 id="form-title">Add a prospect</h2>
-        <button class="btn btn-secondary btn-sm" id="cancel-edit-btn" style="display:none;">Cancel edit</button>
-      </div>
+      <form id="settings-form">
+        <div class="settings-section">
+          <div class="settings-section-title">Company capabilities</div>
 
-      <form id="prospect-form">
-        <input type="hidden" id="prospect-id">
-        <div class="form-grid">
-          <div>
-            <label for="company_name">Company name *</label>
-            <input type="text" id="company_name" required>
+          <label for="services">Services offered (one per line)</label>
+          <textarea id="services" placeholder="Ship agency services
+Crew change
+Port clearance & documentation
+Customs coordination
+Provision supply
+Fresh water supply
+Bunker coordination
+Transport
+Offshore & STS support
+Vessel cleaning
+Warehousing
+Logistics solutions"></textarea>
+
+          <label for="ports_covered">Ports covered (one per line)</label>
+          <textarea id="ports_covered" placeholder="Shinas
+Sohar
+Muscat
+Duqm
+Salalah"></textarea>
+        </div>
+
+        <div class="settings-section">
+          <div class="settings-section-title">Operational partnership model</div>
+          <label for="operational_partnership_model">How Oman sub-agency / operational partnerships work</label>
+          <textarea id="operational_partnership_model" class="tall-textarea" placeholder="Established shipping or marine companies in Oman may keep the vessel/client relationship while Yacht Logistics executes agreed local operational work under the appointed/licensed agent's authority."></textarea>
+          <div id="partnership-field-note" class="field-note"></div>
+        </div>
+
+        <div class="settings-section">
+          <div class="settings-section-title">Prospecting & route priorities</div>
+          <label for="target_markets">Priority markets (one per line)</label>
+          <textarea id="target_markets" placeholder="UAE
+Saudi Arabia
+Qatar
+Bahrain
+Kuwait
+Iran
+India
+Pakistan
+International"></textarea>
+          <div class="field-note">Prospect Finder still rotates regions so one country cannot dominate the database.</div>
+
+          <label for="outreach_route_notes">Approved route / market notes</label>
+          <textarea id="outreach_route_notes" class="tall-textarea" placeholder="Yachts Logistics provides shipping/logistics support from Shinas Port, Oman to Iran. Use this naturally for relevant Iranian, forwarding, trading and cargo prospects."></textarea>
+          <div class="field-note">These notes are available to the Relevance Scorer and Outreach Writer. They are not sent automatically and do not bypass your approved services.</div>
+        </div>
+
+        <div class="settings-section">
+          <div class="settings-section-title">AI communication rules</div>
+
+          <label for="approved_claims">Approved claims (things it is okay to say about the company)</label>
+          <textarea id="approved_claims"></textarea>
+
+          <label for="forbidden_claims">Forbidden claims (things it must never say)</label>
+          <textarea id="forbidden_claims"></textarea>
+
+          <label for="signature">Email signature</label>
+          <textarea id="signature" class="tall-textarea"></textarea>
+        </div>
+
+        <div class="settings-section">
+          <div class="settings-section-title">AI provider control</div>
+          <div class="ai-switch-row">
+            <div>
+              <label for="ai_openai_enabled" class="switch-label">Use OpenAI Luna</label>
+              <div class="field-note">ON = prefer OpenAI Luna. OFF = Gemini takes over automatically. The Router also falls back to Gemini if OpenAI is paced, out of credit, or unavailable.</div>
+            </div>
+            <label class="toggle-switch" aria-label="Use OpenAI Luna">
+              <input type="checkbox" id="ai_openai_enabled" checked>
+              <span class="toggle-slider"></span>
+            </label>
           </div>
-          <div>
-            <label for="country">Country</label>
-            <input type="text" id="country">
-          </div>
-          <div>
-            <label for="website">Website</label>
-            <input type="text" id="website" placeholder="https://">
-          </div>
-          <div>
-            <label for="business_type">Business type</label>
-            <select id="business_type">
-              <option value="">Select…</option>
-              <option>Shipowner</option>
-              <option>Ship Manager</option>
-              <option>Vessel Operator</option>
-              <option>Charterer</option>
-              <option>Shipbroker</option>
-              <option>Freight Forwarder</option>
-              <option>Offshore & Marine</option>
-              <option>Overseas Agent</option>
-              <option>Other</option>
-            </select>
-          </div>
-          <div>
-            <label for="oman_relevance_score">Oman relevance score (0–100)</label>
-            <input type="number" id="oman_relevance_score" min="0" max="100">
-          </div>
-          <div>
-            <label for="status">Status</label>
-            <select id="status">
-              <option value="discovered">Discovered</option>
-              <option value="researched">Researched</option>
-              <option value="draft_ready">Draft Ready</option>
-              <option value="approved">Approved</option>
-              <option value="contacted">Contacted</option>
-              <option value="follow_up_due">Follow-up Due</option>
-              <option value="replied">Replied</option>
-              <option value="meeting">Meeting</option>
-              <option value="quotation">Quotation</option>
-              <option value="won">Won</option>
-              <option value="lost">Lost</option>
-            </select>
-          </div>
-          <div class="full">
-            <label for="fleet_info">Fleet / vessel information</label>
-            <textarea id="fleet_info"></textarea>
-          </div>
-          <div class="full">
-            <label for="relevance_reason">Why they may need Oman services</label>
-            <textarea id="relevance_reason"></textarea>
-          </div>
-          <div class="full">
-            <label for="source_links">Source links (one per line — evidence for this record)</label>
-            <textarea id="source_links" placeholder="https://..."></textarea>
+          <div class="ai-mode-line" id="ai-mode-line">OpenAI Luna preferred</div>
+
+          <div class="form-grid form-grid-2 ai-budget-grid">
+            <div>
+              <label for="openai_monthly_budget_usd">OpenAI monthly safety budget (USD)</label>
+              <input type="number" id="openai_monthly_budget_usd" min="0.10" max="4.50" step="0.10" value="4.50">
+              <div class="field-note">Hard maximum in Router v2 is $4.50, leaving a buffer from your $5 credit. It also paces spend across the remaining days of the month.</div>
+            </div>
+            <div>
+              <label for="gemini_daily_request_limit">Gemini worker requests/day</label>
+              <input type="number" id="gemini_daily_request_limit" min="1" max="24" step="1" value="20">
+              <div class="field-note">Default 20, with a hard maximum of 24. Batching lets one request score/write several companies.</div>
+            </div>
           </div>
         </div>
 
-        <div class="error-text" id="form-error"></div>
+        <div class="settings-section">
+          <div class="settings-section-title">Outreach controls</div>
+          <label for="daily_max">Daily sending limit (max outreach emails/day)</label>
+          <input type="number" id="daily_max" min="0" value="20">
+          <div class="field-note">Approval remains required before sending. This number is a ceiling, not an instruction to send automatically.</div>
+        </div>
 
+        <div class="error-text" id="settings-error"></div>
         <div class="form-actions">
-          <button type="submit" class="btn btn-primary" id="save-btn">Save prospect</button>
+          <button type="submit" class="btn btn-primary" id="settings-save">Save settings</button>
         </div>
       </form>
-    </div>
-
-    <div class="panel">
-      <div class="panel-header">
-        <h2>All prospects</h2>
-      </div>
-      <table>
-        <thead>
-          <tr>
-            <th>Company</th>
-            <th>Country</th>
-            <th>Type</th>
-            <th>Score</th>
-            <th>Status</th>
-            <th></th>
-          </tr>
-        </thead>
-        <tbody id="prospects-tbody">
-          <tr class="empty-row"><td colspan="6">Loading…</td></tr>
-        </tbody>
-      </table>
     </div>
   </main>
 </div>
 
 <script type="module">
-  import { supabase, requireAuth, wireSignOut, logActivity, statusBadge } from './js/supabaseClient.js';
+  import { supabase, requireAuth, wireSignOut, logActivity } from './js/supabaseClient.js';
 
   await requireAuth();
   wireSignOut();
 
-  const form = document.getElementById('prospect-form');
-  const errorBox = document.getElementById('form-error');
-  const saveBtn = document.getElementById('save-btn');
-  const formTitle = document.getElementById('form-title');
-  const cancelBtn = document.getElementById('cancel-edit-btn');
-  const idField = document.getElementById('prospect-id');
+  let profileId = null;
+  let partnershipColumnAvailable = false;
+  let currentSendingLimits = {};
+  const DEFAULT_TARGET_MARKETS = ['UAE','Saudi Arabia','Qatar','Bahrain','Kuwait','Iran','India','Pakistan','International'];
+  const DEFAULT_ROUTE_NOTES = 'Yachts Logistics provides shipping/logistics support from Shinas Port, Oman to Iran. Use this naturally for relevant Iranian, forwarding, trading and cargo prospects.';
 
-  function resetForm() {
-    form.reset();
-    idField.value = '';
-    formTitle.textContent = 'Add a prospect';
-    saveBtn.textContent = 'Save prospect';
-    cancelBtn.style.display = 'none';
+  function linesToArray(text) {
+    return text.split('\n').map(s => s.trim()).filter(Boolean);
   }
 
-  cancelBtn.addEventListener('click', resetForm);
-
-  function readForm() {
-    const linksRaw = document.getElementById('source_links').value.trim();
-    return {
-      company_name: document.getElementById('company_name').value.trim(),
-      country: document.getElementById('country').value.trim() || null,
-      website: document.getElementById('website').value.trim() || null,
-      business_type: document.getElementById('business_type').value || null,
-      oman_relevance_score: document.getElementById('oman_relevance_score').value
-        ? parseInt(document.getElementById('oman_relevance_score').value, 10) : null,
-      status: document.getElementById('status').value || 'discovered',
-      fleet_info: document.getElementById('fleet_info').value.trim() || null,
-      relevance_reason: document.getElementById('relevance_reason').value.trim() || null,
-      source_links: linksRaw ? linksRaw.split('\n').map(s => s.trim()).filter(Boolean) : null,
-      updated_at: new Date().toISOString()
-    };
-  }
-
-  form.addEventListener('submit', async (e) => {
-    e.preventDefault();
-    errorBox.textContent = '';
-    saveBtn.disabled = true;
-
-    const payload = readForm();
-    if (!payload.company_name) {
-      errorBox.textContent = 'Company name is required.';
-      saveBtn.disabled = false;
-      return;
-    }
-
-    const editingId = idField.value;
-
-    if (editingId) {
-      const { error } = await supabase.from('prospects').update(payload).eq('id', editingId);
-      if (error) { errorBox.textContent = error.message; saveBtn.disabled = false; return; }
-      await logActivity('Manual Entry', `Updated prospect "${payload.company_name}"`, 'prospects', editingId, payload);
-    } else {
-      const { data, error } = await supabase.from('prospects').insert(payload).select().single();
-      if (error) { errorBox.textContent = error.message; saveBtn.disabled = false; return; }
-      await logActivity('Manual Entry', `Added prospect "${payload.company_name}"`, 'prospects', data.id, payload);
-    }
-
-    saveBtn.disabled = false;
-    resetForm();
-    await loadProspects();
-  });
-
-  async function editProspect(id) {
-    const { data, error } = await supabase.from('prospects').select('*').eq('id', id).single();
-    if (error || !data) return;
-
-    idField.value = data.id;
-    document.getElementById('company_name').value = data.company_name || '';
-    document.getElementById('country').value = data.country || '';
-    document.getElementById('website').value = data.website || '';
-    document.getElementById('business_type').value = data.business_type || '';
-    document.getElementById('oman_relevance_score').value = data.oman_relevance_score ?? '';
-    document.getElementById('status').value = data.status || 'discovered';
-    document.getElementById('fleet_info').value = data.fleet_info || '';
-    document.getElementById('relevance_reason').value = data.relevance_reason || '';
-    document.getElementById('source_links').value = (data.source_links || []).join('\n');
-
-    formTitle.textContent = `Editing "${data.company_name}"`;
-    saveBtn.textContent = 'Save changes';
-    cancelBtn.style.display = 'inline-flex';
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-  }
-
-  async function deleteProspect(id, name) {
-    if (!confirm(`Delete "${name}"? This cannot be undone.`)) return;
-    const { error } = await supabase.from('prospects').delete().eq('id', id);
-    if (error) { alert(error.message); return; }
-    await logActivity('Manual Entry', `Deleted prospect "${name}"`, 'prospects', id, {});
-    await loadProspects();
-  }
-
-  async function loadProspects() {
-    const tbody = document.getElementById('prospects-tbody');
-    const { data, error } = await supabase
-      .from('prospects').select('*')
-      .order('discovered_at', { ascending: false });
-
-    if (error) {
-      tbody.innerHTML = `<tr class="empty-row"><td colspan="6">Error loading prospects: ${error.message}</td></tr>`;
-      return;
-    }
-
-    if (!data || data.length === 0) {
-      tbody.innerHTML = '<tr class="empty-row"><td colspan="6">No prospects yet — add the first one above.</td></tr>';
-      return;
-    }
-
-    tbody.innerHTML = data.map(p => `
-      <tr>
-        <td>${escapeHtml(p.company_name || '—')}</td>
-        <td>${escapeHtml(p.country || '—')}</td>
-        <td>${escapeHtml(p.business_type || '—')}</td>
-        <td>${p.oman_relevance_score ?? '—'}</td>
-        <td>${statusBadge(p.status)}</td>
-        <td>
-          <button class="btn btn-secondary btn-sm" data-edit="${p.id}">Edit</button>
-          <button class="btn-danger-text" data-delete="${p.id}" data-name="${escapeHtml(p.company_name || '')}">Delete</button>
-        </td>
-      </tr>
-    `).join('');
-
-    tbody.querySelectorAll('[data-edit]').forEach(btn => {
-      btn.addEventListener('click', () => editProspect(btn.dataset.edit));
-    });
-    tbody.querySelectorAll('[data-delete]').forEach(btn => {
-      btn.addEventListener('click', () => deleteProspect(btn.dataset.delete, btn.dataset.name));
-    });
-  }
-
-  function escapeHtml(str) {
-    return String(str).replace(/[&<>"']/g, m => ({
-      '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+  function escapeHtml(value) {
+    return String(value ?? '').replace(/[&<>"']/g, m => ({
+      '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
     }[m]));
   }
 
-  await loadProspects();
-  setInterval(loadProspects, 30000);
-</script>
+  async function detectPartnershipColumn() {
+    const result = await supabase.from('company_profile')
+      .select('operational_partnership_model')
+      .limit(1);
 
+    partnershipColumnAvailable = !result.error;
+    const field = document.getElementById('operational_partnership_model');
+    const note = document.getElementById('partnership-field-note');
+
+    if (!partnershipColumnAvailable) {
+      field.disabled = true;
+      note.innerHTML = 'Run the included <code>sql/add-operational-partnership-model.sql</code> once in Supabase to enable this field. The rest of Settings continues to work normally.';
+    } else {
+      field.disabled = false;
+      note.textContent = 'This is kept separate from Services so AI workers do not confuse a partnership structure with a service you sell.';
+    }
+  }
+
+  async function loadProfile() {
+    await detectPartnershipColumn();
+
+    const { data, error } = await supabase.from('company_profile').select('*').limit(1);
+    if (error) {
+      document.getElementById('settings-error').textContent = error.message;
+      return;
+    }
+    if (!data || data.length === 0) return;
+
+    const p = data[0];
+    profileId = p.id;
+    document.getElementById('services').value = (p.services || []).join('\n');
+    document.getElementById('ports_covered').value = (p.ports_covered || []).join('\n');
+    document.getElementById('approved_claims').value = (p.approved_claims || []).join('\n');
+    document.getElementById('forbidden_claims').value = (p.forbidden_claims || []).join('\n');
+    document.getElementById('signature').value = p.signature || '';
+    currentSendingLimits = (p.sending_limits && typeof p.sending_limits === 'object') ? p.sending_limits : {};
+    document.getElementById('daily_max').value = currentSendingLimits.daily_max ?? 20;
+    document.getElementById('ai_openai_enabled').checked = currentSendingLimits.ai_openai_enabled !== false;
+    document.getElementById('openai_monthly_budget_usd').value = Math.min(4.5, Number(currentSendingLimits.openai_monthly_budget_usd ?? 4.5));
+    document.getElementById('gemini_daily_request_limit').value = Math.min(24, Math.max(1, parseInt(currentSendingLimits.gemini_daily_request_limit ?? 20, 10)));
+    document.getElementById('target_markets').value = Array.isArray(currentSendingLimits.target_markets)
+      ? currentSendingLimits.target_markets.join('\n')
+      : DEFAULT_TARGET_MARKETS.join('\n');
+    document.getElementById('outreach_route_notes').value = currentSendingLimits.outreach_route_notes || DEFAULT_ROUTE_NOTES;
+    updateAiModeLine();
+
+    if (partnershipColumnAvailable) {
+      document.getElementById('operational_partnership_model').value = p.operational_partnership_model || '';
+    }
+  }
+
+  function updateAiModeLine() {
+    const on = document.getElementById('ai_openai_enabled').checked;
+    const line = document.getElementById('ai-mode-line');
+    line.textContent = on ? 'OpenAI Luna preferred · Gemini automatic fallback' : 'OpenAI paused · Gemini active';
+    line.className = 'ai-mode-line ' + (on ? 'state-ok' : 'state-warn');
+  }
+
+  document.getElementById('ai_openai_enabled').addEventListener('change', updateAiModeLine);
+
+  document.getElementById('settings-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const errorBox = document.getElementById('settings-error');
+    const btn = document.getElementById('settings-save');
+    errorBox.textContent = '';
+    btn.disabled = true;
+
+    const payload = {
+      services: linesToArray(document.getElementById('services').value),
+      ports_covered: linesToArray(document.getElementById('ports_covered').value),
+      approved_claims: linesToArray(document.getElementById('approved_claims').value),
+      forbidden_claims: linesToArray(document.getElementById('forbidden_claims').value),
+      signature: document.getElementById('signature').value.trim(),
+      sending_limits: {
+        ...currentSendingLimits,
+        daily_max: parseInt(document.getElementById('daily_max').value || '20', 10),
+        ai_openai_enabled: document.getElementById('ai_openai_enabled').checked,
+        openai_monthly_budget_usd: Math.min(4.5, Math.max(0.1, parseFloat(document.getElementById('openai_monthly_budget_usd').value || '4.5'))),
+        gemini_daily_request_limit: Math.min(24, Math.max(1, parseInt(document.getElementById('gemini_daily_request_limit').value || '20', 10))),
+        target_markets: linesToArray(document.getElementById('target_markets').value),
+        outreach_route_notes: document.getElementById('outreach_route_notes').value.trim()
+      }
+    };
+
+    if (partnershipColumnAvailable) {
+      payload.operational_partnership_model =
+        document.getElementById('operational_partnership_model').value.trim();
+    }
+
+    let error;
+    if (profileId) {
+      ({ error } = await supabase.from('company_profile').update(payload).eq('id', profileId));
+    } else {
+      const { data, error: insertError } = await supabase.from('company_profile').insert(payload).select().single();
+      error = insertError;
+      if (data) profileId = data.id;
+    }
+
+    btn.disabled = false;
+    if (error) {
+      errorBox.textContent = error.message;
+      return;
+    }
+
+    currentSendingLimits = payload.sending_limits;
+    await logActivity('Manual Entry', 'Updated company settings', 'company_profile', profileId, {
+      operational_partnership_model_saved: partnershipColumnAvailable,
+      ai_openai_enabled: payload.sending_limits.ai_openai_enabled,
+      openai_monthly_budget_usd: payload.sending_limits.openai_monthly_budget_usd,
+      gemini_daily_request_limit: payload.sending_limits.gemini_daily_request_limit
+    });
+    btn.textContent = 'Saved ✓';
+    setTimeout(() => { btn.textContent = 'Save settings'; }, 1800);
+  });
+
+  await loadProfile();
+</script>
 <script type="module" src="./js/navigation.js"></script>
 </body>
 </html>
